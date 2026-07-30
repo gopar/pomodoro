@@ -20,10 +20,18 @@ Setup:
 1. Copy `pomo/agent.toml.sample` to `pomo/agent.toml`; set `server_url` and
    `machine_name`. A Tailscale hostname is recommended (there is no app-level
    auth by default; set `POMO_TOKEN` on server + agents to enable it).
-2. Home-base only: `cp pomo/launchd/ai.pomo.server.plist ~/Library/LaunchAgents/`
-   then `launchctl load` it.
-3. Every machine: `cp pomo/launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/`
-   then `launchctl load` it.
+2. Home-base only — start the server:
+   - macOS: `cp pomo/launchd/ai.pomo.server.plist ~/Library/LaunchAgents/`
+     then `launchctl load` it.
+   - Linux: `cp pomo/systemd/pomo-server.service ~/.config/systemd/user/`
+     then `systemctl --user daemon-reload && systemctl --user enable --now pomo-server`.
+3. Every machine — start the agent:
+   - macOS: `cp pomo/launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/`
+     then `launchctl load` it.
+   - Linux: `cp pomo/systemd/pomo-agent.service ~/.config/systemd/user/`
+     then `systemctl --user daemon-reload && systemctl --user enable --now pomo-agent`.
+   - Linux persistence across logout/reboot: `loginctl enable-linger "$USER"`.
+     Logs: `journalctl --user -u pomo-agent -f`.
 
 Offline: starts write the local cache immediately and queue the push; the
 agent syncs on reconnect (last-write-wins by timestamp).

@@ -8,7 +8,7 @@
     launchctl load ~/Library/LaunchAgents/ai.pomo.agent.plist
   Uninstall:
     launchctl unload ~/Library/LaunchAgents/ai.pomo.agent.plist
-  Configure server URL / side effects in ~/.config/pomo/agent.toml
+  Configure server_url / machine_name / hooks in ~/.config/pomo/agent.toml
   (POMO_SERVER_URL below overrides agent.toml if set).
 -->
 <plist version="1.0">

@@ -1,0 +1,34 @@
+# Pomodoro local agent (every machine) — systemd user service.
+#
+# Install (per machine):
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/pomo-agent.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now pomo-agent
+#   # keep the user service running after logout / across reboot:
+#   loginctl enable-linger "$USER"
+#
+# Logs:   journalctl --user -u pomo-agent -f
+# Stop:   systemctl --user stop pomo-agent
+# Config: ~/.config/pomo/agent.toml (server_url / machine_name / hooks).
+#         POMO_SERVER_URL below overrides agent.toml if set.
+#
+# Assumes the repo is deployed at ~/.config/pomo (matching the macOS launchd
+# setup). Adjust ExecStart if you keep it elsewhere.
+
+[Unit]
+Description=Pomodoro local agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env python3 %h/.config/pomo/agent.py
+Restart=always
+RestartSec=5
+# Optional overrides (otherwise agent.toml is used):
+# Environment=POMO_SERVER_URL=http://home-base:8787
+# Environment=POMO_TOKEN=change-me
+
+[Install]
+WantedBy=default.target

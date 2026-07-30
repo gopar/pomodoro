@@ -62,6 +62,11 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# pomo SQLite server DB + WAL sidecars (only if POMO_DB_PATH points inside the repo)
+pomo.db
+pomo.db-wal
+pomo.db-shm
+
 # Flask stuff:
 instance/
 .webassets-cache
