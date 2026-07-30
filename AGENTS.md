@@ -1,0 +1,69 @@
+# AGENTS.md
+
+Multi-machine pomodoro sync service. Python **stdlib only** — no third-party
+deps, no package manager, no build/lint/test config. Requires Python 3.11+
+(`tomllib`); developed/run on macOS.
+
+Tests live in `tests/` (stdlib `unittest`, no deps). Run them with:
+
+    python3 -m unittest discover -s tests -t tests
+
+Add tests under `tests/` to verify changes; for anything that can't be covered
+by a test, run the processes directly (see below).
+Side effects (`shortcuts`, `say`, `afplay`, Emacs) are macOS-specific.
+
+## Architecture (3 processes, shared `common.py`)
+
+- `server.py` — HTTP/JSON source of truth (SQLite, last-write-wins). One instance
+  on a "home-base" machine. Endpoints: `GET /current`, `GET /health`,
+  `POST /sessions`, `POST /sessions/end`.
+- `agent.py` — per-machine daemon. Polls `/current`, owns the countdown→overtime
+  timer, fires side effects, flushes the offline outbox.
+- `pomo.py` — the CLI (`pomo <min>`, `pomo break <min>`, `pomo clear`). Writes the
+  local cache immediately, then pushes (or queues to outbox if offline).
+
+`common.py` is imported by all three (each does `sys.path.insert` on its own dir,
+so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
+
+## Critical invariants — easy to break
+
+- **LWW by `updated_at`**: every session mutation must set `updated_at = time.time()`
+  or the server/agent will silently drop it as stale. See `apply_session` in
+  `server.py` and `tick_timer` in `agent.py`.
+- **`ended` is a real state, not deletion**: stops propagate as an `ended` record
+  (a file deletion can't sync). Keep it in `ALL_STATES`; `is_idle()` treats
+  `idle`/`ended`/`None` as idle.
+- **Legacy file `/tmp/org-pomodoro`** (`STATE START_EPOCH DURATION`) is read by the
+  tmux status bar. `write_cache()` mirrors to it atomically; don't change the format
+  or drop the mirror. Only `ACTIVE_STATES` are written; idle/ended unlink it.
+- **Cache/legacy writes are atomic** (temp file + `replace`) so concurrent readers
+  never see partial data. Preserve this pattern.
+- States: `pomodoro`/`break` → `overtime`/`break-overtime` (via `OVERTIME_OF`) → `ended`.
+
+## Side effects & hooks
+
+- Built-in effects are gated by `[side_effects]` in config; run via `dispatch()` in
+  `agent.py`. All side effects are best-effort and must never crash the loop/CLI.
+- User hooks: executables in `~/.config/pomo/hooks/<event>.d/*` (`hooks.py`), run in
+  lexical order, killed after `hooks.timeout`. Events: `pomodoro_start`,
+  `break_start`, `pomodoro_end`, `break_end`, `session_stop`.
+
+## Config & paths
+
+- Config: `~/.config/pomo/agent.toml` (see `agent.toml.sample`), merged over
+  `_DEFAULT_CONFIG` in `common.py`. Agent re-reads config every loop.
+- Env overrides: `POMO_SERVER_URL` (agent/CLI), `POMO_TOKEN` (bearer auth, both
+  ends), `POMO_PORT`/`POMO_HOST`/`POMO_DB_PATH` (server).
+- Paths in `common.py`: cache `~/.cache/pomo/`, DB `~/.local/share/pomo/pomo.db`.
+
+## Testing Philosophy
+- When adding tests, do your best to minimize mock usage.
+- Prefer tests that test the behavior and not the internals.
+- When fixing a bug, write a test to verify existing bug and then re-run it to verify it has been fix.
+- Tests isolate all state onto a temp dir via `tests/_util.py` (patches path
+  globals in `common`/`server`); they never touch real `~` or `/tmp/org-pomodoro`.
+- Known-red: `test_server.ConcurrencyTests` intentionally FAILS, documenting a
+  lost-update race in `apply_session`'s non-atomic pointer write. It should stay
+  red until the server is hardened (WAL + guarded/atomic UPDATE), not be deleted.
+
+See `README.md` for the setup/launchd flow and hook details.
