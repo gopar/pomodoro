@@ -81,12 +81,11 @@ class LWWTests(unittest.TestCase):
 
 
 class ConcurrencyTests(unittest.TestCase):
-    """EXPECTED TO FAIL until server WAL/atomic-update hardening (track B).
+    """LWW must hold under concurrent writers.
 
-    The read-modify-write of the `current` pointer in apply_session spans two
-    statements on separate connections, so concurrent writers can lose the
-    highest-updated_at winner or hit `database is locked`. This test documents
-    that race and should stay RED until the server is hardened.
+    apply_session runs the history insert and a WHERE-guarded pointer UPDATE
+    inside one BEGIN IMMEDIATE transaction (WAL + busy_timeout), so concurrent
+    writers cannot lose the highest-updated_at winner. These tests guard that.
     """
 
     def setUp(self):
@@ -122,6 +121,34 @@ class ConcurrencyTests(unittest.TestCase):
         with sqlite3.connect(server.DB_PATH) as conn:
             count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         self.assertEqual(count, n, "not all sessions were recorded in history")
+
+    def test_concurrent_mixed_order_selects_global_max(self):
+        # updated_at values submitted in shuffled order across threads; the
+        # winner must always be the global maximum regardless of arrival order.
+        pairs = [(f"s{i:02d}", float(v)) for i, v in
+                 enumerate([50, 10, 99, 30, 70, 5, 88, 42, 60, 15])]
+        max_id = max(pairs, key=lambda p: p[1])[0]
+
+        errors: list[Exception] = []
+        barrier = threading.Barrier(len(pairs))
+
+        def worker(pair) -> None:
+            sid, ts = pair
+            try:
+                barrier.wait()
+                server.apply_session(_session(ts, sid=sid))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
+            list(pool.map(worker, pairs))
+
+        self.assertEqual(errors, [], f"apply_session raised under load: {errors}")
+        self.assertEqual(server.get_current_session()["id"], max_id)
+
+        with sqlite3.connect(server.DB_PATH) as conn:
+            count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        self.assertEqual(count, len(pairs))
 
 
 if __name__ == "__main__":

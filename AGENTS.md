@@ -29,7 +29,10 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 
 - **LWW by `updated_at`**: every session mutation must set `updated_at = time.time()`
   or the server/agent will silently drop it as stale. See `apply_session` in
-  `server.py` and `tick_timer` in `agent.py`.
+  `server.py` and `tick_timer` in `agent.py`. On the server this is race-safe:
+  the history insert + a WHERE-guarded pointer UPDATE (`? >= updated_at`) run in
+  one `BEGIN IMMEDIATE` transaction (WAL + `busy_timeout`), so concurrent writers
+  can't lose the newest write.
 - **`ended` is a real state, not deletion**: stops propagate as an `ended` record
   (a file deletion can't sync). Keep it in `ALL_STATES`; `is_idle()` treats
   `idle`/`ended`/`None` as idle.
@@ -62,8 +65,5 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 - When fixing a bug, write a test to verify existing bug and then re-run it to verify it has been fix.
 - Tests isolate all state onto a temp dir via `tests/_util.py` (patches path
   globals in `common`/`server`); they never touch real `~` or `/tmp/org-pomodoro`.
-- Known-red: `test_server.ConcurrencyTests` intentionally FAILS, documenting a
-  lost-update race in `apply_session`'s non-atomic pointer write. It should stay
-  red until the server is hardened (WAL + guarded/atomic UPDATE), not be deleted.
 
 See `README.md` for the setup/launchd flow and hook details.

@@ -46,8 +46,16 @@ TOKEN = os.environ.get("POMO_TOKEN") or None
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    # isolation_level=None -> autocommit; we drive transactions explicitly with
+    # BEGIN IMMEDIATE so the LWW read-modify-write cannot interleave.
+    conn = sqlite3.connect(DB_PATH, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    # WAL improves read/write concurrency; busy_timeout blocks (instead of
+    # instantly erroring) when another writer holds the lock. synchronous=NORMAL
+    # is the safe pairing for WAL (durable across app crashes).
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -89,28 +97,31 @@ def _row_to_session(row: sqlite3.Row) -> dict:
     }
 
 
+def _current_session_locked(conn: sqlite3.Connection) -> dict:
+    """Read the current session using an already-open connection.
+
+    Shared by the public getter and apply_session (so the returned `current`
+    can be read inside the same transaction, closing the read-after-commit gap).
+    """
+    row = conn.execute(
+        "SELECT session_id FROM current WHERE singleton = 0"
+    ).fetchone()
+    if not row or not row["session_id"]:
+        return common.idle_session()
+    srow = conn.execute(
+        "SELECT * FROM sessions WHERE id = ?", (row["session_id"],)
+    ).fetchone()
+    if not srow:
+        return common.idle_session()
+    session = _row_to_session(srow)
+    if session["state"] == "ended":
+        return common.idle_session()
+    return session
+
+
 def get_current_session() -> dict:
     with _connect() as conn:
-        cur = conn.execute("SELECT session_id FROM current WHERE singleton = 0")
-        row = cur.fetchone()
-        if not row or not row["session_id"]:
-            return common.idle_session()
-        srow = conn.execute(
-            "SELECT * FROM sessions WHERE id = ?", (row["session_id"],)
-        ).fetchone()
-        if not srow:
-            return common.idle_session()
-        session = _row_to_session(srow)
-        if session["state"] == "ended":
-            return common.idle_session()
-        return session
-
-
-def _current_updated_at(conn: sqlite3.Connection) -> float:
-    row = conn.execute(
-        "SELECT updated_at FROM current WHERE singleton = 0"
-    ).fetchone()
-    return row["updated_at"] if row and row["updated_at"] is not None else 0.0
+        return _current_session_locked(conn)
 
 
 def apply_session(session: dict) -> tuple[bool, dict]:
@@ -118,6 +129,11 @@ def apply_session(session: dict) -> tuple[bool, dict]:
 
     Returns (applied, current_session). If the incoming updated_at is older
     than the stored current pointer, the write is ignored (applied=False).
+
+    The history insert and the guarded pointer UPDATE run inside a single
+    BEGIN IMMEDIATE transaction. The LWW comparison lives in the UPDATE's
+    WHERE clause (`? >= updated_at`), so it is atomic and cannot lose an
+    update under concurrent writers.
     """
     required = ("id", "state", "start_epoch", "duration",
                 "origin_machine", "updated_at")
@@ -129,27 +145,31 @@ def apply_session(session: dict) -> tuple[bool, dict]:
 
     with _connect() as conn:
         incoming = float(session["updated_at"])
-        stored = _current_updated_at(conn)
-        # Always record history (even losers) for a faithful log.
-        conn.execute(
-            "INSERT OR REPLACE INTO sessions "
-            "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                session["id"], session["state"], int(session["start_epoch"]),
-                int(session["duration"]), session["origin_machine"],
-                incoming, session.get("ended_at"),
-            ),
-        )
-        if incoming >= stored:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            # Always record history (even losers) for a faithful log.
             conn.execute(
-                "UPDATE current SET session_id = ?, updated_at = ? WHERE singleton = 0",
-                (session["id"], incoming),
+                "INSERT OR REPLACE INTO sessions "
+                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    session["id"], session["state"], int(session["start_epoch"]),
+                    int(session["duration"]), session["origin_machine"],
+                    incoming, session.get("ended_at"),
+                ),
             )
-            applied = True
-        else:
-            applied = False
-    return applied, get_current_session()
+            cur = conn.execute(
+                "UPDATE current SET session_id = ?, updated_at = ? "
+                "WHERE singleton = 0 AND ? >= updated_at",
+                (session["id"], incoming, incoming),
+            )
+            applied = cur.rowcount == 1
+            current = _current_session_locked(conn)
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    return applied, current
 
 
 def end_current(session: dict) -> tuple[bool, dict]:
