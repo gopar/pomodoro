@@ -6,7 +6,7 @@ the countdown timer + side effects.
 
 Responsibilities:
   1. Poll  GET /current every `poll_interval` seconds. If the server's session
-     is newer than our cache, adopt it (update cache + legacy file) and, when
+     is newer than our cache, adopt it (update cache) and, when
      configured, fire side effects for remote-originated sessions.
   2. Local timer: when the active session passes start+duration, transition
      pomodoro->overtime / break->break-overtime, fire side effects, and push

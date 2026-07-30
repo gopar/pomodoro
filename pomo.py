@@ -7,8 +7,8 @@ UX preserved:
     pomo clear            Stop & clear (prompts for a break)
 
 Behavior:
-  - Writes the new session to the local cache immediately (works offline,
-    keeps tmux/legacy file live) and pushes to the server; if the server is
+  - Writes the new session to the local cache immediately (works offline)
+    and pushes to the server; if the server is
     unreachable the push is queued in the outbox for the agent to flush.
   - Fires the *initiating* machine's immediate side effects directly
     (Focus On for a pomodoro; Focus Off + launch Emacs for a break/clear),

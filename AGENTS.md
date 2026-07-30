@@ -36,10 +36,7 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 - **`ended` is a real state, not deletion**: stops propagate as an `ended` record
   (a file deletion can't sync). Keep it in `ALL_STATES`; `is_idle()` treats
   `idle`/`ended`/`None` as idle.
-- **Legacy file `/tmp/org-pomodoro`** (`STATE START_EPOCH DURATION`) is read by the
-  tmux status bar. `write_cache()` mirrors to it atomically; don't change the format
-  or drop the mirror. Only `ACTIVE_STATES` are written; idle/ended unlink it.
-- **Cache/legacy writes are atomic** (temp file + `replace`) so concurrent readers
+- **Cache writes are atomic** (temp file + `replace`) so concurrent readers
   never see partial data. Preserve this pattern.
 - States: `pomodoro`/`break` → `overtime`/`break-overtime` (via `OVERTIME_OF`) → `ended`.
 
@@ -64,6 +61,6 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 - Prefer tests that test the behavior and not the internals.
 - When fixing a bug, write a test to verify existing bug and then re-run it to verify it has been fix.
 - Tests isolate all state onto a temp dir via `tests/_util.py` (patches path
-  globals in `common`/`server`); they never touch real `~` or `/tmp/org-pomodoro`.
+  globals in `common`/`server`); they never touch real `~`.
 
 See `README.md` for the setup/launchd flow and hook details.

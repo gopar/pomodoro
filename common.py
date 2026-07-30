@@ -5,7 +5,7 @@ Pure stdlib. Used by server.py, agent.py, and pomo.py (CLI).
 Responsibilities:
 - Canonical filesystem paths (config, cache, db, outbox).
 - Session model helpers.
-- Local cache read/write (JSON + legacy `STATE START DURATION` line).
+- Local cache read/write (JSON).
 - Minimal HTTP JSON client (urllib) with optional bearer token.
 - agent.toml config loading (tomllib, stdlib in 3.11+).
 """
@@ -44,15 +44,10 @@ DB_FILE = DATA_DIR / "pomo.db"
 # matching lifecycle event (see hooks.py). Local to each machine.
 HOOKS_DIR = CONFIG_DIR / "hooks"
 
-# Legacy state file consumed by tmux/status bars and (historically) emacs.
-# Format: "STATE START_EPOCH DURATION"
-LEGACY_FILE = Path("/tmp/org-pomodoro")
-
 # Valid session states. `ended` is explicit so stops can propagate over the
 # network (a file deletion cannot be synced; an `ended` record can).
 ACTIVE_STATES = ("pomodoro", "overtime", "break", "break-overtime")
 ALL_STATES = ACTIVE_STATES + ("ended",)
-LEGACY_STATES = ACTIVE_STATES  # states the legacy file should represent
 
 
 def ensure_dirs() -> None:
@@ -89,7 +84,7 @@ def is_idle(session: dict | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Local cache (JSON) + legacy line
+# Local cache (JSON)
 # ---------------------------------------------------------------------------
 
 def read_cache() -> dict | None:
@@ -101,50 +96,23 @@ def read_cache() -> dict | None:
 
 
 def write_cache(session: dict) -> None:
-    """Persist the session to the JSON cache and refresh the legacy file.
+    """Persist the session to the JSON cache.
 
-    Writes are atomic (temp file + rename) so concurrent readers such as the
-    tmux status bar never observe a half-written file.
+    The write is atomic (temp file + rename) so concurrent readers never
+    observe a half-written file.
     """
     ensure_dirs()
     tmp = CACHE_FILE.with_suffix(".json.tmp")
     with tmp.open("w", encoding="utf-8") as fh:
         json.dump(session, fh)
     tmp.replace(CACHE_FILE)
-    _write_legacy(session)
-
-
-def _write_legacy(session: dict) -> None:
-    """Mirror the session into /tmp/org-pomodoro for legacy consumers.
-
-    Only active states are represented. For idle/ended we remove the file so
-    the status bar shows nothing (matches the original delete-on-stop UX).
-    """
-    state = session.get("state")
-    if state in LEGACY_STATES:
-        line = f"{state} {int(session['start_epoch'])} {int(session['duration'])}"
-        tmp = LEGACY_FILE.with_suffix(".tmp")
-        try:
-            tmp.write_text(line, encoding="utf-8")
-            tmp.replace(LEGACY_FILE)
-        except OSError:
-            pass
-    else:
-        try:
-            LEGACY_FILE.unlink()
-        except FileNotFoundError:
-            pass
-        except OSError:
-            pass
 
 
 def clear_cache() -> None:
-    for p in (CACHE_FILE,):
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
-    _write_legacy(idle_session())
+    try:
+        CACHE_FILE.unlink()
+    except FileNotFoundError:
+        pass
 
 
 # ---------------------------------------------------------------------------

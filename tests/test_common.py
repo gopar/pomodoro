@@ -1,5 +1,5 @@
-"""Behavior tests for common.py: session model, cache + legacy mirror,
-outbox, and config merge."""
+"""Behavior tests for common.py: session model, cache, outbox, and config
+merge."""
 
 from __future__ import annotations
 
@@ -58,37 +58,14 @@ class CacheTests(unittest.TestCase):
         self.assertIsNone(common.read_cache())
 
 
-class LegacyMirrorTests(unittest.TestCase):
+class CacheAtomicityTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
-
-    def test_active_state_writes_exact_line_format(self):
-        s = common.new_session("pomodoro", 1234, 60, "laptop")
-        common.write_cache(s)
-        self.assertEqual(
-            common.LEGACY_FILE.read_text(encoding="utf-8"),
-            "pomodoro 1234 60",
-        )
-
-    def test_overtime_states_are_mirrored(self):
-        s = common.new_session("break-overtime", 5, 300, "laptop")
-        common.write_cache(s)
-        self.assertEqual(
-            common.LEGACY_FILE.read_text(encoding="utf-8"),
-            "break-overtime 5 300",
-        )
-
-    def test_idle_and_ended_unlink_legacy_file(self):
-        common.write_cache(common.new_session("pomodoro", 1, 60, "laptop"))
-        self.assertTrue(common.LEGACY_FILE.exists())
-        common.write_cache(common.new_session("ended", 1, 0, "laptop"))
-        self.assertFalse(common.LEGACY_FILE.exists())
 
     def test_writes_leave_no_temp_files(self):
         common.write_cache(common.new_session("pomodoro", 1, 60, "laptop"))
         leftovers = list(common.CACHE_DIR.glob("*.tmp"))
         self.assertEqual(leftovers, [])
-        self.assertFalse(common.LEGACY_FILE.with_suffix(".tmp").exists())
 
 
 class OutboxTests(unittest.TestCase):

@@ -14,8 +14,7 @@ Components:
 - `hooks.py`   — runs user-defined executables on lifecycle events.
 - `agent.toml.sample` — per-machine config (server URL, name, side-effect flags).
 
-State cache: `~/.cache/pomo/current.json` plus the legacy `/tmp/org-pomodoro`
-line that the tmux status bar reads (unchanged format).
+State cache: `~/.cache/pomo/current.json`.
 
 Setup:
 1. Copy `pomo/agent.toml.sample` to `pomo/agent.toml`; set `server_url` and

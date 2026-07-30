@@ -35,7 +35,6 @@ def isolate(test) -> Path:
         "OUTBOX_FILE": tmp / "cache" / "outbox.jsonl",
         "DB_FILE": tmp / "data" / "pomo.db",
         "HOOKS_DIR": tmp / "config" / "hooks",
-        "LEGACY_FILE": tmp / "org-pomodoro",
     }
     for name, value in overrides.items():
         _patch(test, common, name, value)
