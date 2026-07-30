@@ -87,12 +87,41 @@ def is_idle(session: dict | None) -> bool:
 # Local cache (JSON)
 # ---------------------------------------------------------------------------
 
+def _valid_session(obj: object) -> bool:
+    """True if `obj` is a well-formed cached session.
+
+    Idle markers (`{"state": "idle"}`, or state ``ended``/``None``) need only a
+    recognizable state. Active/ended records must carry the fields the timer
+    reads so a truncated or hand-edited cache can't crash the agent.
+    """
+    if not isinstance(obj, dict):
+        return False
+    state = obj.get("state")
+    if state in (None, "idle", "ended"):
+        return True
+    if state not in ALL_STATES:
+        return False
+    if not isinstance(obj.get("start_epoch"), (int, float)):
+        return False
+    if not isinstance(obj.get("duration"), (int, float)):
+        return False
+    return "id" in obj and "updated_at" in obj
+
+
 def read_cache() -> dict | None:
+    """Return the cached session, or None if absent/corrupt/malformed.
+
+    Malformed data is treated as "no session" so the agent self-heals on the
+    next write instead of crashing on a bad field.
+    """
     try:
         with CACHE_FILE.open("r", encoding="utf-8") as fh:
-            return json.load(fh)
+            data = json.load(fh)
     except (FileNotFoundError, json.JSONDecodeError):
         return None
+    if not _valid_session(data):
+        return None
+    return data
 
 
 def write_cache(session: dict) -> None:

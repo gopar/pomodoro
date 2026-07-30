@@ -3,6 +3,7 @@ merge."""
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 
@@ -51,6 +52,26 @@ class CacheTests(unittest.TestCase):
         common.ensure_dirs()
         common.CACHE_FILE.write_text("{not json", encoding="utf-8")
         self.assertIsNone(common.read_cache())
+
+    def test_read_cache_rejects_active_session_missing_fields(self):
+        # Active state but no start_epoch/duration -> treat as no session so the
+        # timer can't KeyError on it.
+        common.ensure_dirs()
+        common.CACHE_FILE.write_text(
+            json.dumps({"state": "pomodoro", "id": "x", "updated_at": 1.0}),
+            encoding="utf-8",
+        )
+        self.assertIsNone(common.read_cache())
+
+    def test_read_cache_rejects_non_dict(self):
+        common.ensure_dirs()
+        common.CACHE_FILE.write_text("[1, 2, 3]", encoding="utf-8")
+        self.assertIsNone(common.read_cache())
+
+    def test_read_cache_accepts_idle_marker(self):
+        common.ensure_dirs()
+        common.CACHE_FILE.write_text(json.dumps({"state": "idle"}), encoding="utf-8")
+        self.assertEqual(common.read_cache(), {"state": "idle"})
 
     def test_clear_cache_removes_file(self):
         common.write_cache(common.new_session("pomodoro", 1, 60, "laptop"))

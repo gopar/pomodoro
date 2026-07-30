@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import sys
 import time
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -98,12 +99,16 @@ def tick_timer(cfg: dict) -> None:
     session = common.read_cache()
     if common.is_idle(session):
         return
-    state = session["state"]
+    state = session.get("state")
     overtime_state = OVERTIME_OF.get(state)
     if overtime_state is None:
         return  # already in an overtime state; nothing to do
-    elapsed = time.time() - session["start_epoch"]
-    if elapsed < session["duration"]:
+    start_epoch = session.get("start_epoch")
+    duration = session.get("duration")
+    if not isinstance(start_epoch, (int, float)) or not isinstance(duration, (int, float)):
+        return  # malformed cache; read_cache normally filters this out
+    elapsed = time.time() - start_epoch
+    if elapsed < duration:
         return
     # Transition to overtime locally, fire side effects, push.
     session["state"] = overtime_state
@@ -126,9 +131,15 @@ def loop() -> None:
     )
     while True:
         cfg = common.load_config()  # re-read so config edits take effect live
-        flush_outbox(cfg)
-        poll_server(cfg)
-        tick_timer(cfg)
+        try:
+            flush_outbox(cfg)
+            poll_server(cfg)
+            tick_timer(cfg)
+        except Exception:  # noqa: BLE001 - a bad tick must not kill the daemon
+            # KeyboardInterrupt/SystemExit derive from BaseException and still
+            # propagate, so Ctrl-C and shutdown work. Everything else is logged
+            # and the loop continues (self-heals on the next iteration).
+            sys.stderr.write("pomo-agent: iteration error:\n" + traceback.format_exc())
         time.sleep(float(cfg.get("poll_interval", 5)))
 
 

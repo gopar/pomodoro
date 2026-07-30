@@ -6,6 +6,7 @@ tests exercise real transition logic without touching the network or macOS.
 
 from __future__ import annotations
 
+import io
 import time
 import unittest
 
@@ -59,6 +60,18 @@ class TickTimerTests(unittest.TestCase):
         self.assertEqual(self.events, [])
 
     def test_idle_is_noop(self):
+        agent.tick_timer(self.cfg)
+        self.assertEqual(self.events, [])
+
+    def test_malformed_cache_is_noop(self):
+        # Active state on disk but missing numeric fields -> must not raise or
+        # fire events (read_cache filters it; tick_timer is defensive too).
+        import json
+        common.ensure_dirs()
+        common.CACHE_FILE.write_text(
+            json.dumps({"state": "pomodoro", "id": "x", "updated_at": 1.0}),
+            encoding="utf-8",
+        )
         agent.tick_timer(self.cfg)
         self.assertEqual(self.events, [])
 
@@ -119,6 +132,53 @@ class PollServerTests(unittest.TestCase):
         agent.poll_server(self.cfg)
         # Unpushed local active session must not be clobbered by server idle.
         self.assertEqual(common.read_cache()["id"], local["id"])
+
+
+class _StopLoop(Exception):
+    """Sentinel used to break agent.loop() deterministically in tests."""
+
+
+class LoopResilienceTests(unittest.TestCase):
+    def setUp(self):
+        isolate(self)
+        # Config with a tiny interval; loop re-reads config each iteration.
+        patch_attr(self, common, "load_config",
+                   lambda: {"server_url": "http://x", "machine_name": "laptop",
+                            "poll_interval": 0})
+        # Neutralize the network-y steps by default.
+        patch_attr(self, agent, "flush_outbox", lambda cfg: None)
+        patch_attr(self, agent, "poll_server", lambda cfg: None)
+
+    def test_loop_survives_iteration_error_and_continues(self):
+        self.calls = 0
+
+        def flaky(cfg):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("boom")  # first iteration blows up
+
+        patch_attr(self, agent, "tick_timer", flaky)
+        # Break out on the 2nd sleep so we prove the loop kept going past the error.
+        def sleeper(_):
+            if self.calls >= 2:
+                raise _StopLoop
+        patch_attr(self, agent, "time",
+                   type("T", (), {"sleep": staticmethod(sleeper)}))
+        # Swallow the expected traceback the loop logs to stderr.
+        patch_attr(self, agent.sys, "stderr", io.StringIO())
+
+        with self.assertRaises(_StopLoop):
+            agent.loop()
+        self.assertGreaterEqual(self.calls, 2)  # survived the RuntimeError
+
+    def test_loop_does_not_swallow_keyboard_interrupt(self):
+        def interrupt(cfg):
+            raise KeyboardInterrupt
+        patch_attr(self, agent, "tick_timer", interrupt)
+        patch_attr(self, agent, "time",
+                   type("T", (), {"sleep": staticmethod(lambda _: None)}))
+        with self.assertRaises(KeyboardInterrupt):
+            agent.loop()
 
 
 if __name__ == "__main__":
