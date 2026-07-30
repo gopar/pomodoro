@@ -1,0 +1,24 @@
+# Pomodoro agent configuration (per machine).
+# Copy/edit this file; all keys are optional (defaults shown).
+
+# URL of the pomo server (home-base machine or VPS).
+# Tip: use a Tailscale hostname so it works from anywhere without exposing
+# the port publicly. Overridden by the POMO_SERVER_URL env var if set.
+server_url = "http://127.0.0.1:8787"
+
+# Identity used for last-write-wins/history. Defaults to the hostname.
+machine_name = "laptop"
+
+# Seconds between server polls.
+poll_interval = 5
+
+[side_effects]
+# Which local effects this machine performs.
+focus_mode = true          # `shortcuts run "Focus On"/"Focus Off"`
+alarm = true               # afplay ~/.config/media/alarm.mp3 on overtime
+say = true                 # spoken overtime announcement
+launch_emacs = true        # launch minimal Emacs on break/clear
+
+# Fire side effects for sessions that STARTED on another machine?
+# false = remote sessions only update the status display here.
+run_for_remote_sessions = false

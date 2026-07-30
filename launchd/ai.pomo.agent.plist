@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Pomodoro local agent (every machine).
+  Install:
+    cp ~/.config/pomo/launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/ai.pomo.agent.plist
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/ai.pomo.agent.plist
+  Configure server URL / side effects in ~/.config/pomo/agent.toml
+  (POMO_SERVER_URL below overrides agent.toml if set).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.pomo.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/gopar/.config/pomo/agent.py</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Optional override; otherwise agent.toml server_url is used.
+        <key>POMO_SERVER_URL</key>
+        <string>http://home-base:8787</string>
+        -->
+        <!-- If the server requires a token:
+        <key>POMO_TOKEN</key>
+        <string>change-me</string>
+        -->
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/pomo-agent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/pomo-agent.err.log</string>
+</dict>
+</plist>
