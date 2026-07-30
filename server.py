@@ -39,6 +39,14 @@ PORT = int(os.environ.get("POMO_PORT", "8787"))
 HOST = os.environ.get("POMO_HOST", "0.0.0.0")
 TOKEN = os.environ.get("POMO_TOKEN") or None
 
+# Reject request bodies larger than this (sessions are ~200 bytes). Guards the
+# open LAN endpoint against unbounded reads / memory exhaustion.
+MAX_BODY_BYTES = 65536
+
+
+class RequestTooLarge(Exception):
+    """Raised when a request body exceeds MAX_BODY_BYTES."""
+
 
 # ---------------------------------------------------------------------------
 # Storage
@@ -207,6 +215,9 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
             return {}
+        if length > MAX_BODY_BYTES:
+            # Reject before allocating/reading the oversized body.
+            raise RequestTooLarge(f"{length} > {MAX_BODY_BYTES}")
         raw = self.rfile.read(length)
         return json.loads(raw) if raw else {}
 
@@ -228,6 +239,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"error": "unauthorized"}, 401)
         try:
             payload = self._read_json()
+        except RequestTooLarge:
+            return self._send_json({"error": "request too large"}, 413)
         except json.JSONDecodeError:
             return self._send_json({"error": "invalid json"}, 400)
 
