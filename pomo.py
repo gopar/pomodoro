@@ -10,21 +10,20 @@ Behavior:
   - Writes the new session to the local cache immediately (works offline)
     and pushes to the server; if the server is
     unreachable the push is queued in the outbox for the agent to flush.
-  - Fires the *initiating* machine's immediate side effects directly
-    (Focus On for a pomodoro; Focus Off + launch Emacs for a break/clear),
-    matching the original script. The agent owns only the overtime timer.
+  - Fires lifecycle hooks for the event (pomodoro_start / break_start /
+    session_stop). All side effects live in hooks (see hooks.py); the agent
+    owns only the overtime timer.
 """
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
-import agent as agentmod  # reuse side-effect helpers  # noqa: E402
+import hooks  # noqa: E402
 
 
 def _cfg() -> dict:
@@ -65,7 +64,7 @@ def start_pomodoro(mins: int) -> None:
     session = common.new_session("pomodoro", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
-    agentmod.dispatch("pomodoro_start", session, cfg)
+    hooks.dispatch("pomodoro_start", session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
@@ -75,12 +74,12 @@ def start_break(mins: int) -> None:
     session = common.new_session("break", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
-    agentmod.dispatch("break_start", session, cfg)
+    hooks.dispatch("break_start", session, cfg)
     _push("session", session)
     print(f"Break started for {mins} minute(s) ☕")
 
 
-def stop(session: dict | None, launch_emacs: bool) -> None:
+def stop(session: dict | None) -> None:
     cfg = _cfg()
     end = session or common.new_session("ended", int(time.time()), 0,
                                         cfg["machine_name"])
@@ -89,9 +88,7 @@ def stop(session: dict | None, launch_emacs: bool) -> None:
     end["updated_at"] = time.time()
     end["ended_at"] = time.time()
     common.clear_cache()
-    agentmod.dispatch("session_stop", end, cfg)
-    if launch_emacs:
-        agentmod._launch_emacs(cfg)
+    hooks.dispatch("session_stop", end, cfg)
     _push("end", end)
 
 
@@ -118,7 +115,7 @@ def cmd_start(args: list[str]) -> None:
         return
     active = _current_active()
     if active and active["state"] in ("pomodoro", "overtime"):
-        stop(active, launch_emacs=False)
+        stop(active)
     start_pomodoro(mins)
 
 
@@ -134,9 +131,9 @@ def cmd_break(args: list[str]) -> None:
 
 def cmd_clear() -> None:
     active = _current_active()
-    # Already in a break -> just stop it, no prompt, no Emacs.
+    # Already in a break -> just stop it, no prompt.
     if active and active["state"] in ("break", "break-overtime"):
-        stop(active, launch_emacs=False)
+        stop(active)
         print("Break cleared 🧹")
         return
     try:
@@ -144,7 +141,7 @@ def cmd_clear() -> None:
     except EOFError:
         brk = ""
     if not brk:
-        stop(active, launch_emacs=True)
+        stop(active)
         print("Pomodoro cleared 🧹")
         return
     mins = _require_int(brk, "break minutes")

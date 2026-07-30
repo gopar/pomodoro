@@ -8,11 +8,11 @@ Components:
   Runs on one "home-base" machine (or a VPS). Endpoints: `GET /current`,
   `POST /sessions`, `POST /sessions/end`, `GET /health`.
 - `agent.py`   — per-machine daemon: polls the server every 5s, owns the
-  countdown/overtime timer + side effects, and flushes an offline outbox.
+  countdown/overtime timer, fires lifecycle hooks, and flushes an offline outbox.
 - `pomo.py`    — the CLI (`pomo <min>`, `pomo break <min>`, `pomo clear`).
 - `common.py`  — shared cache/HTTP/config helpers.
 - `hooks.py`   — runs user-defined executables on lifecycle events.
-- `agent.toml.sample` — per-machine config (server URL, name, side-effect flags).
+- `agent.toml.sample` — per-machine config (server URL, name, hooks settings).
 
 State cache: `~/.cache/pomo/current.json`.
 
@@ -28,11 +28,11 @@ Setup:
 Offline: starts write the local cache immediately and queue the push; the
 agent syncs on reconnect (last-write-wins by timestamp).
 
-### Hooks (extend what happens on each event)
+### Hooks (all side effects live here)
 
-The built-in effects (Focus mode, `say`, alarm, launch Emacs) are just the
-shipped defaults, toggled by `[side_effects]`. To run your own actions, drop
-executable scripts into per-machine (local) directories:
+Every side effect is a hook — the agent itself is OS-agnostic and ships with no
+built-in effects. To run actions on lifecycle events, drop executable scripts
+into per-machine (local) directories:
 
 ```
 ~/.config/pomo/hooks/<event>.d/*     # chmod +x
@@ -41,6 +41,16 @@ executable scripts into per-machine (local) directories:
 Events: `pomodoro_start`, `break_start`, `pomodoro_end`, `break_end`,
 `session_stop`. Every executable in the matching `<event>.d/` runs, in lexical
 filename order (prefix with `10-`, `20-`, … to control ordering).
+
+Ready-made examples (macOS Focus/`say`/alarm/Emacs, with Linux equivalents and
+a Windows stub) live in `hooks/examples/<event>.d/`. Copy the ones you want,
+e.g.:
+
+```
+mkdir -p ~/.config/pomo/hooks/pomodoro_start.d
+cp hooks/examples/pomodoro_start.d/10-focus-on.sh ~/.config/pomo/hooks/pomodoro_start.d/
+chmod +x ~/.config/pomo/hooks/pomodoro_start.d/10-focus-on.sh
+```
 
 Each script gets context two ways:
 
@@ -51,6 +61,6 @@ Each script gets context two ways:
 
 Hooks are best-effort: a failing, missing, or slow hook (killed after
 `hooks.timeout` seconds) never affects the timer or CLI. See
-`hooks/examples/` for a starter script, and `[hooks]` in `agent.toml.sample`
+`hooks/examples/` for starter scripts, and `[hooks]` in `agent.toml.sample`
 to tune `enabled` / `timeout` / `dir`.
 

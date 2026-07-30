@@ -42,16 +42,22 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 
 ## Side effects & hooks
 
-- Built-in effects are gated by `[side_effects]` in config; run via `dispatch()` in
-  `agent.py`. All side effects are best-effort and must never crash the loop/CLI.
+- **All side effects are hooks** — the daemon ships no built-in effects and is
+  OS-agnostic. Both CLI and agent fire events via `hooks.dispatch()` in
+  `hooks.py` (the single entry point, so `pomo.py` and `agent.py` don't import
+  each other). Hooks are best-effort and must never crash the loop/CLI.
 - User hooks: executables in `~/.config/pomo/hooks/<event>.d/*` (`hooks.py`), run in
   lexical order, killed after `hooks.timeout`. Events: `pomodoro_start`,
-  `break_start`, `pomodoro_end`, `break_end`, `session_stop`.
+  `break_start`, `pomodoro_end`, `break_end`, `session_stop`. Ready-made examples
+  (macOS + Linux, Windows stub) in `hooks/examples/<event>.d/`.
+- `run_for_remote_sessions` (top-level config) gates whether adopting a
+  remote-started session fires hooks (`on_remote_adopt` in `agent.py`).
 
 ## Config & paths
 
 - Config: `~/.config/pomo/agent.toml` (see `agent.toml.sample`), merged over
-  `_DEFAULT_CONFIG` in `common.py`. Agent re-reads config every loop.
+  `_DEFAULT_CONFIG` in `common.py`. Only `[hooks]` is deep-merged; other keys
+  replace. Agent re-reads config every loop.
 - Env overrides: `POMO_SERVER_URL` (agent/CLI), `POMO_TOKEN` (bearer auth, both
   ends), `POMO_PORT`/`POMO_HOST`/`POMO_DB_PATH` (server).
 - Paths in `common.py`: cache `~/.cache/pomo/`, DB `~/.local/share/pomo/pomo.db`.

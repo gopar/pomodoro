@@ -75,6 +75,17 @@ def _build_env(event: str, session: dict, remote: bool) -> dict:
     return env
 
 
+def dispatch(event: str, session: dict | None, cfg: dict,
+             *, remote: bool = False) -> None:
+    """Run all user hooks for a lifecycle event.
+
+    Kept as the single public entry point used by the CLI and the agent so
+    neither imports the other. Side effects are entirely hook-driven; the
+    daemon is OS-agnostic. Never raises.
+    """
+    fire(event, session, cfg, remote=remote)
+
+
 def fire(event: str, session: dict | None, cfg: dict,
          *, remote: bool = False) -> None:
     """Run every user hook registered for ``event``. Never raises."""

@@ -13,13 +13,14 @@ from _util import isolate, patch_attr
 
 import agent
 import common
+import hooks
 
 
 class TickTimerTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
         self.events: list[str] = []
-        patch_attr(self, agent, "dispatch",
+        patch_attr(self, hooks, "dispatch",
                    lambda event, session, cfg, **kw: self.events.append(event))
         # Server push is a no-op success by default.
         patch_attr(self, common, "post_session", lambda url, s: {})

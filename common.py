@@ -151,13 +151,9 @@ _DEFAULT_CONFIG = {
     "server_url": "http://127.0.0.1:8787",
     "machine_name": socket.gethostname(),
     "poll_interval": 5,
-    "side_effects": {
-        "focus_mode": True,
-        "alarm": True,
-        "say": True,
-        "launch_emacs": True,
-        "run_for_remote_sessions": False,
-    },
+    # Fire lifecycle hooks for sessions that STARTED on another machine?
+    # false = remote sessions only update the local cache/display.
+    "run_for_remote_sessions": False,
     "hooks": {
         "enabled": True,
         # Timeout (seconds) per hook script. Runaway scripts are killed.
@@ -175,7 +171,7 @@ def load_config() -> dict:
         with CONFIG_FILE.open("rb") as fh:
             user = tomllib.load(fh)
         for key, val in user.items():
-            if key in ("side_effects", "hooks") and isinstance(val, dict):
+            if key == "hooks" and isinstance(val, dict):
                 cfg[key].update(val)
             else:
                 cfg[key] = val

@@ -2,24 +2,24 @@
 """Pomodoro local agent (one per machine).
 
 Long-running daemon that keeps this machine in sync with the server and owns
-the countdown timer + side effects.
+the countdown timer.
 
 Responsibilities:
   1. Poll  GET /current every `poll_interval` seconds. If the server's session
      is newer than our cache, adopt it (update cache) and, when
-     configured, fire side effects for remote-originated sessions.
+     configured, fire lifecycle hooks for remote-originated sessions.
   2. Local timer: when the active session passes start+duration, transition
-     pomodoro->overtime / break->break-overtime, fire side effects, and push
+     pomodoro->overtime / break->break-overtime, fire hooks, and push
      the transition to the server.
   3. Outbox flush: pending pushes queued by the CLI while offline are sent on
      each loop; last-write-wins on the server resolves conflicts.
 
-Timer stays local so everything works offline. Stdlib only.
+Side effects are entirely hook-driven (see hooks.py), so the daemon itself is
+OS-agnostic. Timer stays local so everything works offline. Stdlib only.
 """
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -28,87 +28,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
 import hooks  # noqa: E402
 
-ALARM_FILE = common.HOME / ".config" / "media" / "alarm.mp3"
-EMACS_BIN = "/Applications/Emacs.app/Contents/MacOS/Emacs"
-EMACS_INIT = common.HOME / ".config" / "emacs.d" / "init.minimal.gui.el"
-
 OVERTIME_OF = {"pomodoro": "overtime", "break": "break-overtime"}
 
 
-# ---------------------------------------------------------------------------
-# Side effects (best-effort; never crash the loop)
-# ---------------------------------------------------------------------------
-
-def _run(cmd: list[str], background: bool = False) -> None:
-    try:
-        if background:
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
-        else:
-            subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
-    except (OSError, ValueError):
-        pass
-
-
-def _focus(on: bool, cfg: dict) -> None:
-    if not cfg["side_effects"].get("focus_mode"):
-        return
-    _run(["shortcuts", "run", "Focus On" if on else "Focus Off"])
-
-
-def _say(text: str, cfg: dict) -> None:
-    if cfg["side_effects"].get("say"):
-        _run(["say", text])
-
-
-def _alarm(cfg: dict) -> None:
-    if cfg["side_effects"].get("alarm") and ALARM_FILE.exists():
-        _run(["afplay", str(ALARM_FILE)], background=True)
-
-
-def _launch_emacs(cfg: dict) -> None:
-    if cfg["side_effects"].get("launch_emacs") and Path(EMACS_BIN).exists():
-        _run([EMACS_BIN, "-q", "-l", str(EMACS_INIT)], background=True)
-
-
 def on_remote_adopt(session: dict, cfg: dict) -> None:
-    """Fire when we adopt a session that started on another machine."""
-    if not cfg["side_effects"].get("run_for_remote_sessions"):
+    """Fire hooks when we adopt a session that started on another machine."""
+    if not cfg.get("run_for_remote_sessions"):
         return
     state = session.get("state")
     if state == "pomodoro":
-        dispatch("pomodoro_start", session, cfg, remote=True)
+        hooks.dispatch("pomodoro_start", session, cfg, remote=True)
     elif state == "break":
-        dispatch("break_start", session, cfg, remote=True)
-
-
-# ---------------------------------------------------------------------------
-# Event dispatch: built-in effects (gated by [side_effects]) + user hooks
-# ---------------------------------------------------------------------------
-
-def _builtin_effects(event: str, cfg: dict) -> None:
-    """Run the shipped default side effects for an event."""
-    if event == "pomodoro_start":
-        _focus(True, cfg)
-    elif event == "break_start":
-        _focus(False, cfg)
-        _launch_emacs(cfg)
-    elif event == "pomodoro_end":
-        _say("Pomodoro Overtime", cfg)
-        _alarm(cfg)
-    elif event == "break_end":
-        _say("Break Overtime", cfg)
-        _alarm(cfg)
-    elif event == "session_stop":
-        _focus(False, cfg)
-
-
-def dispatch(event: str, session: dict | None, cfg: dict,
-             *, remote: bool = False) -> None:
-    """Run built-in effects then user hooks for a lifecycle event."""
-    _builtin_effects(event, cfg)
-    hooks.fire(event, session, cfg, remote=remote)
+        hooks.dispatch("break_start", session, cfg, remote=True)
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +110,7 @@ def tick_timer(cfg: dict) -> None:
     session["updated_at"] = time.time()
     common.write_cache(session)
     end_event = "break_end" if overtime_state == "break-overtime" else "pomodoro_end"
-    dispatch(end_event, session, cfg)
+    hooks.dispatch(end_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)
     except common.ServerUnavailable:

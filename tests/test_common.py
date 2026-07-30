@@ -103,20 +103,21 @@ class ConfigTests(unittest.TestCase):
     def test_defaults_when_no_file(self):
         cfg = common.load_config()
         self.assertEqual(cfg["poll_interval"], 5)
-        self.assertTrue(cfg["side_effects"]["focus_mode"])
+        self.assertFalse(cfg["run_for_remote_sessions"])
+        self.assertTrue(cfg["hooks"]["enabled"])
         self.assertTrue(cfg["machine_name"])
 
     def test_nested_tables_merge_not_replace(self):
         common.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         common.CONFIG_FILE.write_text(
-            "[side_effects]\nfocus_mode = false\n", encoding="utf-8"
+            "[hooks]\ntimeout = 3\n", encoding="utf-8"
         )
         cfg = common.load_config()
         # overridden key
-        self.assertFalse(cfg["side_effects"]["focus_mode"])
+        self.assertEqual(cfg["hooks"]["timeout"], 3)
         # untouched sibling keys retain their defaults (merge, not replace)
-        self.assertTrue(cfg["side_effects"]["alarm"])
-        self.assertIn("timeout", cfg["hooks"])
+        self.assertTrue(cfg["hooks"]["enabled"])
+        self.assertIn("dir", cfg["hooks"])
 
     def test_env_override_wins(self):
         os.environ["POMO_SERVER_URL"] = "http://example:9999"
