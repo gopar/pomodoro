@@ -22,3 +22,17 @@ launch_emacs = true        # launch minimal Emacs on break/clear
 # Fire side effects for sessions that STARTED on another machine?
 # false = remote sessions only update the status display here.
 run_for_remote_sessions = false
+
+[hooks]
+# Run your own executables on lifecycle events. Drop scripts into:
+#   ~/.config/pomo/hooks/<event>.d/*        (must be executable, chmod +x)
+# Events: pomodoro_start, break_start, pomodoro_end, break_end, session_stop.
+# Scripts run in lexical filename order (use 10-, 20- prefixes to order them).
+#
+# Each script receives context as env vars:
+#   POMO_EVENT POMO_STATE POMO_START_EPOCH POMO_DURATION
+#   POMO_MACHINE POMO_ORIGIN_MACHINE POMO_REMOTE(0/1) POMO_SESSION_ID
+# and the full session as JSON on stdin.
+enabled = true
+timeout = 10               # seconds; a hook exceeding this is killed
+dir = ""                   # override hooks dir; empty = ~/.config/pomo/hooks

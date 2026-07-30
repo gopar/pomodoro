@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
+import hooks  # noqa: E402
 
 ALARM_FILE = common.HOME / ".config" / "media" / "alarm.mp3"
 EMACS_BIN = "/Applications/Emacs.app/Contents/MacOS/Emacs"
@@ -71,23 +72,43 @@ def _launch_emacs(cfg: dict) -> None:
         _run([EMACS_BIN, "-q", "-l", str(EMACS_INIT)], background=True)
 
 
-def on_overtime(state: str, cfg: dict) -> None:
-    """Fire when a session crosses into overtime locally."""
-    text = "Break Overtime" if state == "break-overtime" else "Pomodoro Overtime"
-    _say(text, cfg)
-    _alarm(cfg)
-
-
 def on_remote_adopt(session: dict, cfg: dict) -> None:
     """Fire when we adopt a session that started on another machine."""
     if not cfg["side_effects"].get("run_for_remote_sessions"):
         return
     state = session.get("state")
     if state == "pomodoro":
-        _focus(True, cfg)
+        dispatch("pomodoro_start", session, cfg, remote=True)
     elif state == "break":
+        dispatch("break_start", session, cfg, remote=True)
+
+
+# ---------------------------------------------------------------------------
+# Event dispatch: built-in effects (gated by [side_effects]) + user hooks
+# ---------------------------------------------------------------------------
+
+def _builtin_effects(event: str, cfg: dict) -> None:
+    """Run the shipped default side effects for an event."""
+    if event == "pomodoro_start":
+        _focus(True, cfg)
+    elif event == "break_start":
         _focus(False, cfg)
         _launch_emacs(cfg)
+    elif event == "pomodoro_end":
+        _say("Pomodoro Overtime", cfg)
+        _alarm(cfg)
+    elif event == "break_end":
+        _say("Break Overtime", cfg)
+        _alarm(cfg)
+    elif event == "session_stop":
+        _focus(False, cfg)
+
+
+def dispatch(event: str, session: dict | None, cfg: dict,
+             *, remote: bool = False) -> None:
+    """Run built-in effects then user hooks for a lifecycle event."""
+    _builtin_effects(event, cfg)
+    hooks.fire(event, session, cfg, remote=remote)
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +178,8 @@ def tick_timer(cfg: dict) -> None:
     session["state"] = overtime_state
     session["updated_at"] = time.time()
     common.write_cache(session)
-    on_overtime(overtime_state, cfg)
+    end_event = "break_end" if overtime_state == "break-overtime" else "pomodoro_end"
+    dispatch(end_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)
     except common.ServerUnavailable:

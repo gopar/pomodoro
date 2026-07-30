@@ -62,30 +62,26 @@ def _current_active() -> dict | None:
 
 def start_pomodoro(mins: int) -> None:
     cfg = _cfg()
-    agentmod._focus(True, cfg)
     session = common.new_session("pomodoro", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
+    agentmod.dispatch("pomodoro_start", session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
 
 def start_break(mins: int) -> None:
     cfg = _cfg()
-    agentmod._focus(False, cfg)
-    agentmod._launch_emacs(cfg)
     session = common.new_session("break", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
+    agentmod.dispatch("break_start", session, cfg)
     _push("session", session)
     print(f"Break started for {mins} minute(s) ☕")
 
 
 def stop(session: dict | None, launch_emacs: bool) -> None:
     cfg = _cfg()
-    agentmod._focus(False, cfg)
-    if launch_emacs:
-        agentmod._launch_emacs(cfg)
     end = session or common.new_session("ended", int(time.time()), 0,
                                         cfg["machine_name"])
     end = dict(end)
@@ -93,6 +89,9 @@ def stop(session: dict | None, launch_emacs: bool) -> None:
     end["updated_at"] = time.time()
     end["ended_at"] = time.time()
     common.clear_cache()
+    agentmod.dispatch("session_stop", end, cfg)
+    if launch_emacs:
+        agentmod._launch_emacs(cfg)
     _push("end", end)
 
 

@@ -40,6 +40,10 @@ CACHE_FILE = CACHE_DIR / "current.json"
 OUTBOX_FILE = CACHE_DIR / "outbox.jsonl"
 DB_FILE = DATA_DIR / "pomo.db"
 
+# Per-machine hook scripts. Executables in HOOKS_DIR/<event>.d/ run on the
+# matching lifecycle event (see hooks.py). Local to each machine.
+HOOKS_DIR = CONFIG_DIR / "hooks"
+
 # Legacy state file consumed by tmux/status bars and (historically) emacs.
 # Format: "STATE START_EPOCH DURATION"
 LEGACY_FILE = Path("/tmp/org-pomodoro")
@@ -186,6 +190,13 @@ _DEFAULT_CONFIG = {
         "launch_emacs": True,
         "run_for_remote_sessions": False,
     },
+    "hooks": {
+        "enabled": True,
+        # Timeout (seconds) per hook script. Runaway scripts are killed.
+        "timeout": 10,
+        # Override the hooks directory. Empty -> HOOKS_DIR (~/.config/pomo/hooks).
+        "dir": "",
+    },
 }
 
 
@@ -196,8 +207,8 @@ def load_config() -> dict:
         with CONFIG_FILE.open("rb") as fh:
             user = tomllib.load(fh)
         for key, val in user.items():
-            if key == "side_effects" and isinstance(val, dict):
-                cfg["side_effects"].update(val)
+            if key in ("side_effects", "hooks") and isinstance(val, dict):
+                cfg[key].update(val)
             else:
                 cfg[key] = val
     if not cfg.get("machine_name"):
