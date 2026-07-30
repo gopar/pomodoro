@@ -36,6 +36,28 @@ Setup:
 Offline: starts write the local cache immediately and queue the push; the
 agent syncs on reconnect (last-write-wins by timestamp).
 
+### Run the server with Docker (optional)
+
+Only the **server** is containerized — agents and the CLI stay on the host by
+design (they fire OS-native hooks and write to `~/.config`/`~/.cache`). Use this
+*instead of* `systemd/pomo-server.service` on the home-base (run one, not both).
+
+```
+docker compose up -d          # build + run, persistent volume "pomo-data"
+docker compose logs -f
+```
+
+Or without compose:
+
+```
+docker build -t pomo-server .
+docker run -d --name pomo-server -p 8787:8787 -v pomo-data:/data pomo-server
+```
+
+The SQLite DB (and its WAL sidecars) live in the `/data` volume so they survive
+restarts. Set `POMO_TOKEN` (env / compose) to require bearer auth; point agents
+at this host via their `server_url` / `POMO_SERVER_URL`.
+
 ### Hooks (all side effects live here)
 
 Every side effect is a hook — the agent itself is OS-agnostic and ships with no

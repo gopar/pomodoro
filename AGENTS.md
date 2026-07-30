@@ -12,6 +12,11 @@ Add tests under `tests/` to verify changes; for anything that can't be covered
 by a test, run the processes directly (see below).
 Side effects (`shortcuts`, `say`, `afplay`, Emacs) are macOS-specific.
 
+CI (`.github/workflows/ci.yml`) runs the `unittest` suite on Python 3.11–3.14
+plus a `compileall` syntax gate (Ubuntu). Only the **server** is containerized
+(`Dockerfile` / `docker-compose.yml`, DB on the `/data` volume); agents and the
+CLI are host processes by design.
+
 ## Architecture (3 processes, shared `common.py`)
 
 - `server.py` — HTTP/JSON source of truth (SQLite, last-write-wins). One instance

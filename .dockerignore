@@ -1,0 +1,19 @@
+# Keep the server image minimal: only server.py + common.py are needed.
+.git
+.github
+tests
+__pycache__
+**/__pycache__
+*.pyc
+launchd
+systemd
+hooks
+agent.py
+pomo.py
+agent.toml.sample
+README.md
+AGENTS.md
+Dockerfile
+docker-compose.yml
+.dockerignore
+.gitignore

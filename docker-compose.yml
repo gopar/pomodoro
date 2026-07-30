@@ -1,0 +1,23 @@
+# Home-base pomo server. Alternative to systemd/pomo-server.service — run ONE
+# of them, not both, on the home-base machine.
+#
+#   docker compose up -d
+#   docker compose logs -f
+services:
+  server:
+    build: .
+    image: pomo-server
+    container_name: pomo-server
+    ports:
+      - "8787:8787"
+    volumes:
+      - pomo-data:/data
+    environment:
+      POMO_HOST: "0.0.0.0"
+      POMO_PORT: "8787"
+      # Uncomment to require a bearer token (also set it on every agent):
+      # POMO_TOKEN: "change-me"
+    restart: unless-stopped
+
+volumes:
+  pomo-data:
