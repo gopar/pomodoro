@@ -1,10 +1,9 @@
-# pomo
+# pomoism
 
 [![CI](https://github.com/gopar/pomodoro/actions/workflows/ci.yml/badge.svg)](https://github.com/gopar/pomodoro/actions/workflows/ci.yml)
 
 A pomodoro timer that keeps your current session in sync across all your
-machines and still works offline. Pure standard-library Python — no third-party
-dependencies, no package manager.
+machines and still works offline.
 
 Start a pomodoro on your laptop and your desktop knows about it; when it runs
 over, whichever machine you're on can announce it. Each machine decides for
