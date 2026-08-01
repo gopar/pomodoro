@@ -167,6 +167,59 @@ class PollServerTests(unittest.TestCase):
         self.assertEqual(common.read_cache()["id"], local["id"])
 
 
+class OnRemoteAdoptTests(unittest.TestCase):
+    """Tests for on_remote_adopt: firing the right hooks for remote sessions."""
+
+    def setUp(self):
+        isolate(self)
+        self.events: list[tuple[str, bool]] = []
+
+        def record(event, session, cfg, *, remote=False):
+            self.events.append((event, remote))
+
+        patch_attr(self, hooks, "dispatch", record)
+        self.cfg = {
+            "server_url": "http://x",
+            "machine_name": "laptop",
+            "run_for_remote_sessions": True,
+        }
+
+    def _session(self, state: str) -> dict:
+        return common.new_session(state, 1000, 60, "desktop")
+
+    def test_disabled_when_run_for_remote_sessions_is_false(self):
+        # Given: run_for_remote_sessions is False
+        self.cfg["run_for_remote_sessions"] = False
+        # When: adopting a remote pomodoro session
+        agent.on_remote_adopt(self._session("pomodoro"), self.cfg)
+        # Then: no hooks are dispatched
+        self.assertEqual(self.events, [])
+
+    def test_adopts_remote_pomodoro_start(self):
+        # When: adopting a remote pomodoro session
+        agent.on_remote_adopt(self._session("pomodoro"), self.cfg)
+        # Then: pomodoro_start dispatched with remote=True
+        self.assertEqual(self.events, [("pomodoro_start", True)])
+
+    def test_adopts_remote_break_start(self):
+        # When: adopting a remote break session
+        agent.on_remote_adopt(self._session("break"), self.cfg)
+        # Then: break_start dispatched with remote=True
+        self.assertEqual(self.events, [("break_start", True)])
+
+    def test_adopts_remote_overtime(self):
+        # When: adopting a remote overtime session
+        agent.on_remote_adopt(self._session("overtime"), self.cfg)
+        # Then: pomodoro_overtime dispatched with remote=True
+        self.assertEqual(self.events, [("pomodoro_overtime", True)])
+
+    def test_adopts_remote_break_overtime(self):
+        # When: adopting a remote break-overtime session
+        agent.on_remote_adopt(self._session("break-overtime"), self.cfg)
+        # Then: break_overtime dispatched with remote=True
+        self.assertEqual(self.events, [("break_overtime", True)])
+
+
 class _StopLoop(Exception):
     """Sentinel used to break agent.loop() deterministically in tests."""
 

@@ -42,6 +42,10 @@ def on_remote_adopt(session: dict, cfg: dict) -> None:
         hooks.dispatch("pomodoro_start", session, cfg, remote=True)
     elif state == "break":
         hooks.dispatch("break_start", session, cfg, remote=True)
+    elif state == "overtime":
+        hooks.dispatch("pomodoro_overtime", session, cfg, remote=True)
+    elif state == "break-overtime":
+        hooks.dispatch("break_overtime", session, cfg, remote=True)
 
 
 # ---------------------------------------------------------------------------
