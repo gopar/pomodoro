@@ -8,8 +8,11 @@
     launchctl load ~/Library/LaunchAgents/ai.pomo.agent.plist
   Uninstall:
     launchctl unload ~/Library/LaunchAgents/ai.pomo.agent.plist
+
   Configure server_url / machine_name / hooks in ~/.config/pomo/agent.toml
   (POMO_SERVER_URL below overrides agent.toml if set).
+
+  REPLACE THE PATHS BELOW — see ProgramArguments key.
 -->
 <plist version="1.0">
 <dict>
@@ -17,8 +20,10 @@
     <string>ai.pomo.agent</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/gopar/.config/pomo/agent.py</string>
+        <!-- Replace with your username and the path to your pomo checkout. -->
+        <string>/usr/bin/env</string>
+        <string>python3</string>
+        <string>/Users/REPLACE_WITH_YOUR_USER/.config/pomo/agent.py</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
