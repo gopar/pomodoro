@@ -89,10 +89,30 @@ class LWWTests(unittest.TestCase):
         self.assertTrue(applied)
         with sqlite3.connect(server.DB_PATH) as conn:
             row = conn.execute(
-                "SELECT state, ended_at FROM sessions WHERE id = 'a'"
+                "SELECT state, ended_at FROM sessions WHERE id = 'a' "
+                "ORDER BY updated_at DESC LIMIT 1"
             ).fetchone()
         self.assertEqual(row[0], "ended")
         self.assertIsNotNone(row[1])
+
+    def test_stale_write_does_not_overwrite_newer_history_row(self):
+        # Given: session "a" applied at t=200
+        server.apply_session(_session(200.0, sid="a"))
+        # When: same session "a" re-applied at t=100 (stale)
+        applied, _ = server.apply_session(_session(100.0, sid="a"))
+        # Then: write loses the pointer
+        self.assertFalse(applied)
+        # Then: both rows exist in history — the stale write didn't overwrite
+        # the newer one (composite PK prevents collision)
+        with sqlite3.connect(server.DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT updated_at, state FROM sessions "
+                "WHERE id = 'a' ORDER BY updated_at DESC"
+            ).fetchall()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["updated_at"], 200.0)  # newer row intact
+        self.assertEqual(rows[1]["updated_at"], 100.0)  # stale row also present
 
 
 class ConcurrencyTests(unittest.TestCase):

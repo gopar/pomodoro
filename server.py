@@ -73,13 +73,14 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
-                id             TEXT PRIMARY KEY,
+                id             TEXT NOT NULL,
                 state          TEXT NOT NULL,
                 start_epoch    INTEGER NOT NULL,
                 duration       INTEGER NOT NULL,
                 origin_machine TEXT NOT NULL,
                 updated_at     REAL NOT NULL,
-                ended_at       REAL
+                ended_at       REAL,
+                PRIMARY KEY (id, updated_at)
             )
             """
         )
@@ -118,7 +119,8 @@ def _current_session_locked(conn: sqlite3.Connection) -> dict:
     if not row or not row["session_id"]:
         return common.idle_session()
     srow = conn.execute(
-        "SELECT * FROM sessions WHERE id = ?", (row["session_id"],)
+        "SELECT * FROM sessions WHERE id = ? ORDER BY updated_at DESC LIMIT 1",
+        (row["session_id"],)
     ).fetchone()
     if not srow:
         return common.idle_session()
