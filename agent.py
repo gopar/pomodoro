@@ -30,6 +30,7 @@ import common  # noqa: E402
 import hooks  # noqa: E402
 
 OVERTIME_OF = {"pomodoro": "overtime", "break": "break-overtime"}
+MIN_POLL_INTERVAL = 5.0
 
 
 def on_remote_adopt(session: dict, cfg: dict) -> None:
@@ -122,9 +123,20 @@ def tick_timer(cfg: dict) -> None:
         common.enqueue_outbox("session", session)
 
 
+def _poll_interval(cfg: dict) -> float:
+    raw = float(cfg.get("poll_interval", 5))
+    if raw < MIN_POLL_INTERVAL:
+        sys.stderr.write(
+            f"pomo-agent: poll_interval clamped to {MIN_POLL_INTERVAL}s "
+            f"(config had {raw}s)\n"
+        )
+        return MIN_POLL_INTERVAL
+    return raw
+
+
 def loop() -> None:
     cfg = common.load_config()
-    interval = float(cfg.get("poll_interval", 5))
+    interval = _poll_interval(cfg)
     sys.stderr.write(
         f"pomo-agent: machine={cfg['machine_name']} server={cfg['server_url']} "
         f"interval={interval}s\n"
@@ -140,7 +152,7 @@ def loop() -> None:
             # propagate, so Ctrl-C and shutdown work. Everything else is logged
             # and the loop continues (self-heals on the next iteration).
             sys.stderr.write("pomo-agent: iteration error:\n" + traceback.format_exc())
-        time.sleep(float(cfg.get("poll_interval", 5)))
+        time.sleep(_poll_interval(cfg))
 
 
 if __name__ == "__main__":

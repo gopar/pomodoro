@@ -219,6 +219,27 @@ class LoopResilienceTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             agent.loop()
 
+    def test_poll_interval_below_minimum_is_clamped(self):
+        # Given: config has poll_interval=1 (below minimum of 5)
+        patch_attr(self, common, "load_config",
+                   lambda: {"server_url": "http://x", "machine_name": "laptop",
+                            "poll_interval": 1})
+        sleep_args: list[float] = []
+
+        def capture_sleep(secs):
+            if sleep_args:  # break after first sleep
+                raise _StopLoop
+            sleep_args.append(secs)
+
+        patch_attr(self, agent, "time",
+                   type("T", (), {"sleep": staticmethod(capture_sleep)}))
+        # When: the loop runs
+        with self.assertRaises(_StopLoop):
+            agent.loop()
+        # Then: sleep is called with 5.0 (clamped), stderr warns about override
+        self.assertEqual(sleep_args[0], 5.0)
+        self.assertIn("clamped", agent.sys.stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
