@@ -17,6 +17,7 @@ Behavior:
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -53,6 +54,15 @@ def _current_active() -> dict | None:
     if common.is_idle(session):
         return None
     return session
+
+
+def _fmt_time(seconds: int) -> str:
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
 
 
 # ---------------------------------------------------------------------------
@@ -152,12 +162,51 @@ def cmd_clear() -> None:
     start_break(mins)
 
 
+def cmd_status(args: list[str]) -> None:
+    session = common.read_cache()
+    if common.is_idle(session):
+        if "--json" in args:
+            print(json.dumps({"state": "idle", "display": "No active session"}))
+        else:
+            print("No active session")
+        return
+
+    now = time.time()
+    cache_state = session["state"]
+    start = int(session["start_epoch"])
+    duration = int(session["duration"])
+    elapsed = int(now - start)
+    remaining = duration - elapsed
+
+    overtime_of = {"pomodoro": "overtime", "break": "break-overtime"}
+    effective_state = overtime_of.get(cache_state, cache_state) if remaining <= 0 else cache_state
+
+    icon = {"pomodoro": "🍅", "overtime": "⏰", "break": "☕", "break-overtime": "☕"}.get(effective_state, "")
+    time_str = _fmt_time(-remaining) if remaining < 0 else _fmt_time(remaining)
+    if remaining < 0:
+        time_str = f"+{time_str}"
+    display = f"{icon} {time_str}"
+
+    if "--json" in args:
+        print(json.dumps({
+            "state": effective_state,
+            "start_epoch": start,
+            "duration": duration,
+            "elapsed": elapsed,
+            "remaining": remaining,
+            "display": display,
+        }))
+    else:
+        print(display)
+
+
 def usage() -> None:
     sys.stderr.write(
         "Usage:\n"
         "  pomo <minutes>        Start pomodoro\n"
         "  pomo break <minutes>  Start a break\n"
         "  pomo clear            Stop & clear pomodoro (prompts for a break)\n"
+        "  pomo status [--json]  Show current session status\n"
     )
     sys.exit(1)
 
@@ -170,6 +219,8 @@ def main(argv: list[str]) -> None:
         cmd_clear()
     elif cmd == "break":
         cmd_break(argv[1:])
+    elif cmd == "status":
+        cmd_status(argv[1:])
     else:
         cmd_start(argv)
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import builtins
 import io
+import json
 import sys
 import time
 import unittest
@@ -136,6 +137,167 @@ class CmdStartTests(Base):
         # Then: session_stop fires, then pomodoro_start (this was already correct)
         self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.POMODORO_START])
         self._assert_cache_state("pomodoro")
+
+
+class CmdStatusTests(Base):
+    """pomo status [--json] — read current session."""
+
+    def _freeze_time(self, ts: float):
+        patch_attr(self, time, "time", lambda: ts)
+
+    def test_status_json_idle_no_cache(self):
+        pomo.cmd_status(["--json"])
+        self.assertEqual(json.loads(self._stdout.getvalue()),
+                         {"state": "idle", "display": "No active session"})
+
+    def test_status_json_idle_ended_cache(self):
+        common.write_cache({"state": "ended"})
+        pomo.cmd_status(["--json"])
+        self.assertEqual(json.loads(self._stdout.getvalue()),
+                         {"state": "idle", "display": "No active session"})
+
+    def test_status_json_idle_marker_cache(self):
+        common.write_cache({"state": "idle"})
+        pomo.cmd_status(["--json"])
+        self.assertEqual(json.loads(self._stdout.getvalue()),
+                         {"state": "idle", "display": "No active session"})
+
+    def test_status_json_pomodoro_countdown(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["state"], "pomodoro")
+        self.assertEqual(out["start_epoch"], int(now - 60))
+        self.assertEqual(out["duration"], duration)
+        self.assertEqual(out["elapsed"], 60)
+        self.assertEqual(out["remaining"], duration - 60)
+        self.assertEqual(out["display"], "🍅 24:00")
+
+    def test_status_json_pomodoro_overtime(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        start = int(now - duration - 10)
+        s = common.new_session("pomodoro", start, duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["state"], "overtime")
+        self.assertEqual(out["remaining"], -10)
+        self.assertEqual(out["display"], "⏰ +0:10")
+
+    def test_status_json_break_countdown(self):
+        now = 1722520000.0
+        duration = 5 * 60
+        s = common.new_session("break", int(now - 30), duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["state"], "break")
+        self.assertEqual(out["remaining"], duration - 30)
+        self.assertEqual(out["display"], "☕ 4:30")
+
+    def test_status_json_break_overtime(self):
+        now = 1722520000.0
+        duration = 5 * 60
+        start = int(now - duration - 5)
+        s = common.new_session("break", start, duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["state"], "break-overtime")
+        self.assertEqual(out["remaining"], -5)
+        self.assertEqual(out["display"], "☕ +0:05")
+
+    def test_status_json_already_overtime_in_cache(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        start = int(now - duration - 30)
+        s = common.new_session("overtime", start, duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["state"], "overtime")
+        self.assertEqual(out["remaining"], -30)
+        self.assertEqual(out["display"], "⏰ +0:30")
+
+    def test_status_display_key_matches_human_output(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status(["--json"])
+        json_display = json.loads(self._stdout.getvalue())["display"]
+
+        self._stdout.truncate(0)
+        self._stdout.seek(0)
+        pomo.cmd_status([])
+        human = self._stdout.getvalue().strip()
+
+        self.assertEqual(json_display, human)
+
+    def test_status_human_pomodoro_countdown(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status([])
+        self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00")
+
+    def test_status_human_overtime(self):
+        now = 1722520000.0
+        duration = 25 * 60
+        start = int(now - duration - 65)
+        s = common.new_session("pomodoro", start, duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status([])
+        self.assertEqual(self._stdout.getvalue().strip(), "⏰ +1:05")
+
+    def test_status_human_break_countdown(self):
+        now = 1722520000.0
+        duration = 5 * 60
+        s = common.new_session("break", int(now - 30), duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status([])
+        self.assertEqual(self._stdout.getvalue().strip(), "☕ 4:30")
+
+    def test_status_human_break_overtime_uses_coffee(self):
+        now = 1722520000.0
+        duration = 5 * 60
+        start = int(now - duration - 10)
+        s = common.new_session("break", start, duration, "laptop")
+        common.write_cache(s)
+        self._freeze_time(now)
+
+        pomo.cmd_status([])
+        output = self._stdout.getvalue().strip()
+        self.assertIn("☕", output)
+        self.assertIn("+", output)
+        self.assertEqual(output, "☕ +0:10")
+
+    def test_status_human_idle(self):
+        pomo.cmd_status([])
+        self.assertEqual(self._stdout.getvalue().strip(), "No active session")
 
 
 if __name__ == "__main__":
