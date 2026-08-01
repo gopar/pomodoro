@@ -2,18 +2,18 @@
 # pomo hook: announce overtime (spoken) and play an alarm sound.
 #
 # Replicates the old built-in `say` + `alarm` effects. The same script works
-# for pomodoro_end and break_end (message derived from POMO_EVENT).
+# for pomodoro_overtime and break_overtime (message derived from POMO_EVENT).
 #
 # Install into BOTH event dirs you want it in, e.g.:
-#   mkdir -p ~/.config/pomo/hooks/pomodoro_end.d ~/.config/pomo/hooks/break_end.d
-#   cp hooks/examples/pomodoro_end.d/10-announce.sh ~/.config/pomo/hooks/pomodoro_end.d/
-#   cp hooks/examples/pomodoro_end.d/10-announce.sh ~/.config/pomo/hooks/break_end.d/
+#   mkdir -p ~/.config/pomo/hooks/pomodoro_overtime.d ~/.config/pomo/hooks/break_overtime.d
+#   cp hooks/examples/pomodoro_overtime.d/10-announce.sh ~/.config/pomo/hooks/pomodoro_overtime.d/
+#   cp hooks/examples/pomodoro_overtime.d/10-announce.sh ~/.config/pomo/hooks/break_overtime.d/
 #   chmod +x ~/.config/pomo/hooks/*/10-announce.sh
 set -eu
 
 case "${POMO_EVENT:-}" in
-  break_end) msg="Break Overtime" ;;
-  *)         msg="Pomodoro Overtime" ;;
+  break_overtime) msg="Break Overtime" ;;
+  *)              msg="Pomodoro Overtime" ;;
 esac
 
 ALARM="${HOME}/.config/media/alarm.mp3"

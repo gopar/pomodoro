@@ -110,7 +110,7 @@ into per-machine (local) directories:
 ~/.config/pomo/hooks/<event>.d/*     # chmod +x
 ```
 
-Events: `pomodoro_start`, `break_start`, `pomodoro_end`, `break_end`,
+Events: `pomodoro_start`, `break_start`, `pomodoro_overtime`, `break_overtime`,
 `session_stop`. Every executable in the matching `<event>.d/` runs, in lexical
 filename order (prefix with `10-`, `20-`, … to control ordering).
 

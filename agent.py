@@ -114,8 +114,8 @@ def tick_timer(cfg: dict) -> None:
     session["state"] = overtime_state
     session["updated_at"] = time.time()
     common.write_cache(session)
-    end_event = "break_end" if overtime_state == "break-overtime" else "pomodoro_end"
-    hooks.dispatch(end_event, session, cfg)
+    overtime_event = "break_overtime" if overtime_state == "break-overtime" else "pomodoro_overtime"
+    hooks.dispatch(overtime_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)
     except common.ServerUnavailable:

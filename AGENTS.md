@@ -53,7 +53,7 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
   each other). Hooks are best-effort and must never crash the loop/CLI.
 - User hooks: executables in `~/.config/pomo/hooks/<event>.d/*` (`hooks.py`), run in
   lexical order, killed after `hooks.timeout`. Events: `pomodoro_start`,
-  `break_start`, `pomodoro_end`, `break_end`, `session_stop`. Ready-made examples
+  `break_start`, `pomodoro_overtime`, `break_overtime`, `session_stop`. Ready-made examples
   (macOS + Linux, Windows stub) in `hooks/examples/<event>.d/`.
 - `run_for_remote_sessions` (top-level config) gates whether adopting a
   remote-started session fires hooks (`on_remote_adopt` in `agent.py`).

@@ -9,8 +9,8 @@ For a given event, every executable in that directory is run, in lexical
 order of filename (use numeric prefixes like ``10-``/``20-`` to control
 ordering). This is language-agnostic: shell, python, whatever is executable.
 
-Events fired: ``pomodoro_start``, ``break_start``, ``pomodoro_end``,
-``break_end``, ``session_stop``.
+Events fired: ``pomodoro_start``, ``break_start``, ``pomodoro_overtime``,
+``break_overtime``, ``session_stop``.
 
 Each script receives the session context two ways:
 
@@ -35,8 +35,8 @@ import common
 EVENTS = (
     "pomodoro_start",
     "break_start",
-    "pomodoro_end",
-    "break_end",
+    "pomodoro_overtime",
+    "break_overtime",
     "session_stop",
 )
 

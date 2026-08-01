@@ -45,13 +45,13 @@ class TickTimerTests(unittest.TestCase):
         after = common.read_cache()
         self.assertEqual(after["state"], "overtime")
         self.assertGreaterEqual(after["updated_at"], before["updated_at"])
-        self.assertEqual(self.events, ["pomodoro_end"])
+        self.assertEqual(self.events, ["pomodoro_overtime"])
 
     def test_break_transitions_to_break_overtime(self):
         self._active("break", elapsed=61, duration=60)
         agent.tick_timer(self.cfg)
         self.assertEqual(common.read_cache()["state"], "break-overtime")
-        self.assertEqual(self.events, ["break_end"])
+        self.assertEqual(self.events, ["break_overtime"])
 
     def test_already_overtime_is_noop(self):
         self._active("overtime", elapsed=999, duration=60)

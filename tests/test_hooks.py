@@ -64,7 +64,7 @@ class HooksTests(unittest.TestCase):
 
     def test_missing_event_dir_is_noop(self):
         # No directory created -> must not raise.
-        hooks.dispatch("break_end", None, self.cfg)
+        hooks.dispatch("break_overtime", None, self.cfg)
 
     def test_non_executable_file_is_skipped(self):
         out = self.tmp / "skip.txt"
