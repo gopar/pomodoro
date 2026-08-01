@@ -183,6 +183,8 @@ class LoopResilienceTests(unittest.TestCase):
         # Neutralize the network-y steps by default.
         patch_attr(self, agent, "flush_outbox", lambda cfg: None)
         patch_attr(self, agent, "poll_server", lambda cfg: None)
+        # Suppress agent startup log during tests.
+        patch_attr(self, agent.sys, "stderr", io.StringIO())
 
     def test_loop_survives_iteration_error_and_continues(self):
         # Given: tick_timer raises RuntimeError on first call, succeeds after
@@ -200,8 +202,6 @@ class LoopResilienceTests(unittest.TestCase):
                 raise _StopLoop
         patch_attr(self, agent, "time",
                    type("T", (), {"sleep": staticmethod(sleeper)}))
-        # Swallow the expected traceback the loop logs to stderr.
-        patch_attr(self, agent.sys, "stderr", io.StringIO())
         # When: the loop runs
         # Then: it survives the RuntimeError and continues iterating
         with self.assertRaises(_StopLoop):
