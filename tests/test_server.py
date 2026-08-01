@@ -1,7 +1,7 @@
 """Behavior tests for server.py: last-write-wins, history, and end/idle.
 
-Includes an intentionally hard-red concurrency test that documents the
-non-atomic read-modify-write of the `current` pointer (track B hardening).
+Includes concurrency tests that exercise the WHERE-guarded pointer UPDATE under
+concurrent writers (WAL + busy_timeout).
 """
 
 from __future__ import annotations
@@ -26,51 +26,66 @@ def _session(updated_at: float, state: str = "pomodoro", sid: str | None = None)
 
 
 class LWWTests(unittest.TestCase):
+    """Tests for apply_session / end_current: LWW semantics and state handling."""
+
     def setUp(self):
         tmp = isolate(self)
         patch_attr(self, server, "DB_PATH", tmp / "data" / "pomo.db")
         server.init_db()
 
     def test_apply_missing_field_raises(self):
+        # When: apply_session is called with a dict missing required fields
+        # Then: ValueError is raised
         with self.assertRaises(ValueError):
             server.apply_session({"id": "x"})
 
     def test_apply_invalid_state_raises(self):
+        # Given: a session with a bogus state
         bad = _session(1.0)
         bad["state"] = "bogus"
+        # When: apply_session is called
+        # Then: ValueError is raised
         with self.assertRaises(ValueError):
             server.apply_session(bad)
 
     def test_newer_write_wins(self):
+        # Given: an older session "a" is applied
         applied, current = server.apply_session(_session(100.0, sid="a"))
         self.assertTrue(applied)
         self.assertEqual(current["id"], "a")
-
+        # When: a newer session "b" is applied
         applied, current = server.apply_session(_session(200.0, sid="b"))
+        # Then: "b" wins the current pointer
         self.assertTrue(applied)
         self.assertEqual(current["id"], "b")
 
     def test_older_write_loses_but_is_recorded_in_history(self):
+        # Given: a newer session "winner" is applied
         server.apply_session(_session(200.0, sid="winner"))
+        # When: an older session "loser" is applied
         applied, current = server.apply_session(_session(100.0, sid="loser"))
-
+        # Then: the write loses the pointer (applied=False)
         self.assertFalse(applied)
         self.assertEqual(current["id"], "winner")
-
-        # Loser must still be in history even though it lost the pointer.
+        # Then: loser is still recorded in history even though it lost
         with sqlite3.connect(server.DB_PATH) as conn:
             ids = {r[0] for r in conn.execute("SELECT id FROM sessions")}
         self.assertIn("loser", ids)
         self.assertIn("winner", ids)
 
     def test_ended_pointer_reports_idle(self):
+        # Given: an active session applied, then ended
         server.apply_session(_session(100.0, sid="a"))
         server.end_current(_session(200.0, sid="a"))
+        # When / Then: get_current_session reports idle
         self.assertTrue(common.is_idle(server.get_current_session()))
 
     def test_end_current_sets_ended_at(self):
+        # Given: an active session
         server.apply_session(_session(100.0, sid="a"))
+        # When: end_current is called
         applied, _ = server.end_current(_session(200.0, sid="a"))
+        # Then: session is marked ended with ended_at set
         self.assertTrue(applied)
         with sqlite3.connect(server.DB_PATH) as conn:
             row = conn.execute(
@@ -85,7 +100,7 @@ class ConcurrencyTests(unittest.TestCase):
 
     apply_session runs the history insert and a WHERE-guarded pointer UPDATE
     inside one BEGIN IMMEDIATE transaction (WAL + busy_timeout), so concurrent
-    writers cannot lose the highest-updated_at winner. These tests guard that.
+    writers cannot lose the highest-updated_at winner.
     """
 
     def setUp(self):
@@ -94,6 +109,7 @@ class ConcurrencyTests(unittest.TestCase):
         server.init_db()
 
     def test_concurrent_apply_keeps_highest_updated_at(self):
+        # Given: n sessions with sequential updated_at timestamps
         n = 25
         sessions = [_session(float(i + 1), sid=f"s{i:02d}") for i in range(n)]
 
@@ -107,9 +123,11 @@ class ConcurrencyTests(unittest.TestCase):
             except Exception as exc:  # noqa: BLE001 - collected for assertion
                 errors.append(exc)
 
+        # When: all sessions are applied concurrently from n threads
         with ThreadPoolExecutor(max_workers=n) as pool:
             list(pool.map(worker, sessions))
 
+        # Then: no errors, highest-updated_at wins, all n sessions in history
         self.assertEqual(errors, [], f"apply_session raised under load: {errors}")
 
         current = server.get_current_session()
@@ -123,8 +141,8 @@ class ConcurrencyTests(unittest.TestCase):
         self.assertEqual(count, n, "not all sessions were recorded in history")
 
     def test_concurrent_mixed_order_selects_global_max(self):
-        # updated_at values submitted in shuffled order across threads; the
-        # winner must always be the global maximum regardless of arrival order.
+        # Given: updated_at values in shuffled order across threads
+        # The winner must be the global maximum regardless of arrival order.
         pairs = [(f"s{i:02d}", float(v)) for i, v in
                  enumerate([50, 10, 99, 30, 70, 5, 88, 42, 60, 15])]
         max_id = max(pairs, key=lambda p: p[1])[0]
@@ -140,9 +158,11 @@ class ConcurrencyTests(unittest.TestCase):
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
+        # When: all sessions are applied concurrently in shuffled order
         with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
             list(pool.map(worker, pairs))
 
+        # Then: no errors, global max wins, all sessions in history
         self.assertEqual(errors, [], f"apply_session raised under load: {errors}")
         self.assertEqual(server.get_current_session()["id"], max_id)
 
