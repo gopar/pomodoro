@@ -158,7 +158,16 @@ def enqueue_outbox(action: str, session: dict) -> None:
 def read_outbox() -> list[dict]:
     try:
         with OUTBOX_FILE.open("r", encoding="utf-8") as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+            items: list[dict] = []
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+            return items
     except FileNotFoundError:
         return []
 

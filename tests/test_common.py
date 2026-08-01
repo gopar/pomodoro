@@ -143,6 +143,19 @@ class OutboxTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["action"], "end")
 
+    def test_read_outbox_skips_corrupt_lines(self):
+        # Given: an outbox file with a corrupt line between two valid ones
+        s = common.new_session("pomodoro", 1, 60, "laptop")
+        common.enqueue_outbox("session", s)
+        common.ensure_dirs()
+        with common.OUTBOX_FILE.open("a", encoding="utf-8") as fh:
+            fh.write("{not json\n")
+        common.enqueue_outbox("end", s)
+        # When: outbox is read
+        items = common.read_outbox()
+        # Then: the two valid items are returned, corrupt line is skipped
+        self.assertEqual([i["action"] for i in items], ["session", "end"])
+
 
 class ConfigTests(unittest.TestCase):
     def setUp(self):
