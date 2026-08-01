@@ -126,6 +126,9 @@ def cmd_break(args: list[str]) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
+    active = _current_active()
+    if active and active["state"] in ("pomodoro", "overtime"):
+        stop(active)
     start_break(mins)
 
 
@@ -145,6 +148,7 @@ def cmd_clear() -> None:
         print("Pomodoro cleared 🧹")
         return
     mins = _require_int(brk, "break minutes")
+    stop(active)
     start_break(mins)
 
 
