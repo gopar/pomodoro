@@ -1,4 +1,4 @@
-# pomoism
+# pomo
 
 [![CI](https://github.com/gopar/pomodoro/actions/workflows/ci.yml/badge.svg)](https://github.com/gopar/pomodoro/actions/workflows/ci.yml)
 
