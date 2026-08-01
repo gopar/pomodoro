@@ -23,6 +23,7 @@ Config via env:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -68,7 +69,7 @@ def _connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    with _connect() as conn:
+    with contextlib.closing(_connect()) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -128,7 +129,7 @@ def _current_session_locked(conn: sqlite3.Connection) -> dict:
 
 
 def get_current_session() -> dict:
-    with _connect() as conn:
+    with contextlib.closing(_connect()) as conn:
         return _current_session_locked(conn)
 
 
@@ -151,7 +152,7 @@ def apply_session(session: dict) -> tuple[bool, dict]:
     if session["state"] not in common.ALL_STATES:
         raise ValueError(f"invalid state: {session['state']!r}")
 
-    with _connect() as conn:
+    with contextlib.closing(_connect()) as conn:
         incoming = float(session["updated_at"])
         conn.execute("BEGIN IMMEDIATE")
         try:
