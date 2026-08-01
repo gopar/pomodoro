@@ -32,12 +32,18 @@ from pathlib import Path
 
 import common
 
+POMODORO_START = "pomodoro_start"
+BREAK_START = "break_start"
+POMODORO_OVERTIME = "pomodoro_overtime"
+BREAK_OVERTIME = "break_overtime"
+SESSION_STOP = "session_stop"
+
 EVENTS = (
-    "pomodoro_start",
-    "break_start",
-    "pomodoro_overtime",
-    "break_overtime",
-    "session_stop",
+    POMODORO_START,
+    BREAK_START,
+    POMODORO_OVERTIME,
+    BREAK_OVERTIME,
+    SESSION_STOP,
 )
 
 

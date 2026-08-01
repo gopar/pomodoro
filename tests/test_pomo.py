@@ -76,7 +76,7 @@ class CmdBreakTests(Base):
         # When: pomo break 5 is run
         pomo.cmd_break(["5"])
         # Then: session_stop fires first, then break_start
-        self.assertEqual(self.events, ["session_stop", "break_start"])
+        self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.BREAK_START])
         # Then: cache has the break session
         self._assert_cache_state("break")
 
@@ -91,7 +91,7 @@ class CmdClearTests(Base):
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires first, then break_start
-        self.assertEqual(self.events, ["session_stop", "break_start"])
+        self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.BREAK_START])
         # Then: cache has the break session
         self._assert_cache_state("break")
 
@@ -112,7 +112,7 @@ class CmdClearTests(Base):
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires, cache cleared (this was already correct)
-        self.assertEqual(self.events, ["session_stop"])
+        self.assertEqual(self.events, [hooks.SESSION_STOP])
         self._assert_cache_state(None)
 
     def test_clear_active_break_stops_it(self):
@@ -121,7 +121,7 @@ class CmdClearTests(Base):
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires, cache cleared (this was already correct)
-        self.assertEqual(self.events, ["session_stop"])
+        self.assertEqual(self.events, [hooks.SESSION_STOP])
         self._assert_cache_state(None)
 
 
@@ -134,7 +134,7 @@ class CmdStartTests(Base):
         # When: pomo 25 is run
         pomo.cmd_start(["25"])
         # Then: session_stop fires, then pomodoro_start (this was already correct)
-        self.assertEqual(self.events, ["session_stop", "pomodoro_start"])
+        self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.POMODORO_START])
         self._assert_cache_state("pomodoro")
 
 

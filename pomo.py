@@ -64,7 +64,7 @@ def start_pomodoro(mins: int) -> None:
     session = common.new_session("pomodoro", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
-    hooks.dispatch("pomodoro_start", session, cfg)
+    hooks.dispatch(hooks.POMODORO_START, session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
@@ -74,7 +74,7 @@ def start_break(mins: int) -> None:
     session = common.new_session("break", int(time.time()), mins * 60,
                                  cfg["machine_name"])
     common.write_cache(session)
-    hooks.dispatch("break_start", session, cfg)
+    hooks.dispatch(hooks.BREAK_START, session, cfg)
     _push("session", session)
     print(f"Break started for {mins} minute(s) ☕")
 
@@ -88,7 +88,7 @@ def stop(session: dict | None) -> None:
     end["updated_at"] = time.time()
     end["ended_at"] = time.time()
     common.clear_cache()
-    hooks.dispatch("session_stop", end, cfg)
+    hooks.dispatch(hooks.SESSION_STOP, end, cfg)
     _push("end", end)
 
 

@@ -39,13 +39,13 @@ def on_remote_adopt(session: dict, cfg: dict) -> None:
         return
     state = session.get("state")
     if state == "pomodoro":
-        hooks.dispatch("pomodoro_start", session, cfg, remote=True)
+        hooks.dispatch(hooks.POMODORO_START, session, cfg, remote=True)
     elif state == "break":
-        hooks.dispatch("break_start", session, cfg, remote=True)
+        hooks.dispatch(hooks.BREAK_START, session, cfg, remote=True)
     elif state == "overtime":
-        hooks.dispatch("pomodoro_overtime", session, cfg, remote=True)
+        hooks.dispatch(hooks.POMODORO_OVERTIME, session, cfg, remote=True)
     elif state == "break-overtime":
-        hooks.dispatch("break_overtime", session, cfg, remote=True)
+        hooks.dispatch(hooks.BREAK_OVERTIME, session, cfg, remote=True)
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ def tick_timer(cfg: dict) -> None:
     session["state"] = overtime_state
     session["updated_at"] = time.time()
     common.write_cache(session)
-    overtime_event = "break_overtime" if overtime_state == "break-overtime" else "pomodoro_overtime"
+    overtime_event = hooks.BREAK_OVERTIME if overtime_state == "break-overtime" else hooks.POMODORO_OVERTIME
     hooks.dispatch(overtime_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)

@@ -53,7 +53,7 @@ class TickTimerTests(unittest.TestCase):
         after = common.read_cache()
         self.assertEqual(after["state"], "overtime")
         self.assertGreaterEqual(after["updated_at"], before["updated_at"])
-        self.assertEqual(self.events, ["pomodoro_overtime"])
+        self.assertEqual(self.events, [hooks.POMODORO_OVERTIME])
 
     def test_break_transitions_to_break_overtime(self):
         # Given: a break past its duration
@@ -62,7 +62,7 @@ class TickTimerTests(unittest.TestCase):
         agent.tick_timer(self.cfg)
         # Then: state becomes break-overtime, break_overtime event fires
         self.assertEqual(common.read_cache()["state"], "break-overtime")
-        self.assertEqual(self.events, ["break_overtime"])
+        self.assertEqual(self.events, [hooks.BREAK_OVERTIME])
 
     def test_already_overtime_is_noop(self):
         # Given: already in overtime state
@@ -199,25 +199,25 @@ class OnRemoteAdoptTests(unittest.TestCase):
         # When: adopting a remote pomodoro session
         agent.on_remote_adopt(self._session("pomodoro"), self.cfg)
         # Then: pomodoro_start dispatched with remote=True
-        self.assertEqual(self.events, [("pomodoro_start", True)])
+        self.assertEqual(self.events, [(hooks.POMODORO_START, True)])
 
     def test_adopts_remote_break_start(self):
         # When: adopting a remote break session
         agent.on_remote_adopt(self._session("break"), self.cfg)
         # Then: break_start dispatched with remote=True
-        self.assertEqual(self.events, [("break_start", True)])
+        self.assertEqual(self.events, [(hooks.BREAK_START, True)])
 
     def test_adopts_remote_overtime(self):
         # When: adopting a remote overtime session
         agent.on_remote_adopt(self._session("overtime"), self.cfg)
         # Then: pomodoro_overtime dispatched with remote=True
-        self.assertEqual(self.events, [("pomodoro_overtime", True)])
+        self.assertEqual(self.events, [(hooks.POMODORO_OVERTIME, True)])
 
     def test_adopts_remote_break_overtime(self):
         # When: adopting a remote break-overtime session
         agent.on_remote_adopt(self._session("break-overtime"), self.cfg)
         # Then: break_overtime dispatched with remote=True
-        self.assertEqual(self.events, [("break_overtime", True)])
+        self.assertEqual(self.events, [(hooks.BREAK_OVERTIME, True)])
 
 
 class _StopLoop(Exception):
