@@ -2,180 +2,275 @@
 
 [![CI](https://github.com/gopar/pomodoro/actions/workflows/ci.yml/badge.svg)](https://github.com/gopar/pomodoro/actions/workflows/ci.yml)
 
-A pomodoro timer that keeps your current session in sync across all your
-machines and still works offline.
+A pomodoro timer for people who live in the terminal and work across multiple
+machines. Sessions sync to your home-base server so you can start a session on
+one machine and see the countdown and get the overtime warning on another.
 
-Start a pomodoro on your laptop and your desktop knows about it; when it runs
-over, whichever machine you're on can announce it. Each machine decides for
-itself what happens on each event (notifications, Focus mode, sounds, …) through
-simple hook scripts.
+- **Multi-machine sync** — laptop, desktop, any machine. Start on one, see it
+  everywhere.
+- **Works offline** — the timer is local. Write the cache now, sync later.
+- **Hooks, not built-ins** — every side effect (notifications, Focus mode,
+  sounds) is an executable script you control. Language-agnostic.
+- **Project tagging** — tag sessions to projects: `pomo 25 -p website`.
+  Filter history by project, see everything you've worked on.
+- **Zero dependencies** — Python 3.11+ stdlib only. No pip, no npm, no
+  package manager.
 
-## How it works
-
-Three small processes share `common.py`:
-
-- **`server.py`** — the source of truth. An HTTP/JSON service backed by SQLite
-  with an append-only history; conflicts resolve last-write-wins by timestamp.
-  Runs on one "home-base" machine (or a VPS / container).
-- **`agent.py`** — a per-machine daemon. Polls the server, owns the local
-  countdown→overtime timer, fires lifecycle hooks, and flushes an offline outbox
-  when the server is unreachable.
-- **`pomo.py`** — the CLI you actually type (`pomo 25`, `pomo break 5`,
-  `pomo clear`). Writes the local cache immediately, then pushes to the server
-  (or queues the push if offline).
-
-A session moves through: `pomodoro`/`break` → `overtime`/`break-overtime` →
-`ended`. Because the timer is local, everything keeps working with no network.
-
-## Requirements
-
-- Python **3.11+** (uses the stdlib `tomllib`), nothing else to install.
-- The agent and CLI run on the host (macOS/Linux). The server runs anywhere,
-  including Docker.
+---
 
 ## Usage
 
-The `pomo` command is `pomo.py`. Put it on your `PATH` (symlink or alias), e.g.
-`ln -s ~/.config/pomo/pomo.py ~/.local/bin/pomo`, then:
-
-```
-# Quick start
-pomo start <minutes>  Start a pomodoro
-pomo break <minutes>  Start a break
-pomo clear            Stop & clear the pomodoro (prompts for a break)
-```
+Symlink `pomo.py` onto your `PATH`:
 
 ```sh
-> pomo --help
-usage: pomo [-h] {start,break,clear,status,history} ...
+ln -s ~/.config/pomo/pomo.py ~/.local/bin/pomo
+```
 
-Start, stop, and track pomodoro sessions.
+### Start a session
+
+```sh
+pomo start 25                        # 25-minute pomodoro
+pomo start 25 -p website             # ...tagged to a project
+pomo start 25 -p website -n "login"  # ...with a name
+pomo break 5                         # 5-minute break
+pomo clear                           # stop + optionally start a break
+```
+
+### Check status
+
+```sh
+pomo status
+# 🍅 18:22 [website] [fix login]
+
+pomo status --json
+# {"state": "pomodoro", "remaining": 1102, "display": "🍅 18:22 [website] [fix login]", ...}
+```
+
+### History
+
+```sh
+pomo history
+# 2026-08-01
+#   09:14 – 09:39  🍅  25:00  [website]
+#   09:42 – 10:12  🍅  30:09  [website] [fix login]
+#   10:15 – 10:20  ☕  05:00  [website]
+
+pomo history --project website       # filter by project
+pomo history --json                  # machine-readable
+```
+
+### Projects
+
+```sh
+pomo projects
+# website
+# backend
+# cli-tool
+
+pomo projects --json
+# [{"project": "website"}, {"project": "backend"}, ...]
+```
+
+### Full help
+
+```
+pomo --help
+usage: pomo [-h] {start,break,clear,status,history,projects} ...
 
 positional arguments:
-  {start,break,clear,status,history}
+  {start,break,clear,status,history,projects}
     start               Start a pomodoro for N minutes
     break               Start a break for N minutes
     clear               Stop current session, optionally start a break
     status              Show current session status
     history             Show today's session history
+    projects            List all defined projects
 
 options:
   -h, --help            show this help message and exit
 ```
 
+---
+
 ## Setup
 
-The repo is deployed to `~/.config/pomo` on each machine — that's where the
-launchd/systemd service files expect to find `agent.py` / `server.py`.
+The repo lives at `~/.config/pomo` on each machine.
 
-1. Copy the sample config and edit it:
+1. **Copy the sample config:**
 
+   ```sh
+   cp agent.toml.sample agent.toml
    ```
-   cp agent.toml.sample agent.toml   # sets server_url + machine_name
+
+   Edit `server_url` to point at your home-base machine. A Tailscale hostname
+   works well. Set `POMO_TOKEN` on the server and all agents if you want
+   bearer auth (disabled by default).
+
+2. **Home-base machine — start the server:**
+
+   macOS:
+
+   ```sh
+   cp launchd/ai.pomo.server.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/ai.pomo.server.plist
    ```
 
-   A Tailscale hostname for `server_url` is recommended. There is no app-level
-   auth by default; set `POMO_TOKEN` on the server and every agent to enable
-   bearer auth.
+   Linux:
 
-2. **Home-base only** — start the server:
-   - macOS: `cp launchd/ai.pomo.server.plist ~/Library/LaunchAgents/` then
-     `launchctl load` it.
-   - Linux: `cp systemd/pomo-server.service ~/.config/systemd/user/` then
-     `systemctl --user daemon-reload && systemctl --user enable --now pomo-server`.
-   - Docker: see below.
+   ```sh
+   cp systemd/pomo-server.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now pomo-server
+   ```
 
-3. **Every machine** — start the agent:
-   - macOS: `cp launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/` then
-     `launchctl load` it.
-   - Linux: `cp systemd/pomo-agent.service ~/.config/systemd/user/` then
-     `systemctl --user daemon-reload && systemctl --user enable --now pomo-agent`.
-     For persistence across logout/reboot: `loginctl enable-linger "$USER"`.
-     Logs: `journalctl --user -u pomo-agent -f`.
+   Docker (use *instead of* systemd — run one, not both):
 
-Offline behavior: starts write the local cache immediately and queue the push;
-the agent syncs on reconnect (last-write-wins by timestamp).
+   ```sh
+   docker compose up -d
+   ```
 
-## Run the server with Docker (optional)
+3. **Every machine — start the agent:**
 
-Only the **server** is containerized — agents and the CLI stay on the host by
-design (they fire OS-native hooks and write to `~/.config`/`~/.cache`). Use this
-*instead of* `systemd/pomo-server.service` on the home-base (run one, not both).
+   macOS:
 
-```
-docker compose up -d          # build + run, persistent volume "pomo-data"
-docker compose logs -f
-```
+   ```sh
+   cp launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/ai.pomo.agent.plist
+   ```
 
-Or without compose:
+   Linux:
 
-```
-docker build -t pomo-server .
-docker run -d --name pomo-server -p 8787:8787 -v pomo-data:/data pomo-server
-```
+   ```sh
+   cp systemd/pomo-agent.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now pomo-agent
+   # For persistence across logout/reboot:
+   loginctl enable-linger "$USER"
+   ```
 
-The SQLite DB (and its WAL sidecars) live in the `/data` volume so they survive
-restarts. Set `POMO_TOKEN` (env / compose) to require bearer auth; point agents
-at this host via their `server_url` / `POMO_SERVER_URL`.
+That's it. The CLI writes the local cache immediately and pushes to the server;
+if the server is unreachable the push is queued in an offline outbox. The agent
+flushes it on reconnect (last-write-wins by timestamp).
 
-## Hooks (all side effects live here)
+---
 
-Every side effect is a hook — the agent itself is OS-agnostic and ships with no
-built-in effects. To run actions on lifecycle events, drop executable scripts
-into per-machine (local) directories:
+## Hooks
+
+Every side effect is a hook — the agent ships with zero built-in effects and
+is OS-agnostic. Drop executable scripts into per-machine directories:
 
 ```
-~/.config/pomo/hooks/<event>.d/*     # chmod +x
+~/.config/pomo/hooks/<event>.d/*
 ```
 
-Events: `pomodoro_start`, `break_start`, `pomodoro_overtime`, `break_overtime`,
-`session_stop`. Every executable in the matching `<event>.d/` runs, in lexical
-filename order (prefix with `10-`, `20-`, … to control ordering).
+Events: `pomodoro_start`, `break_start`, `pomodoro_overtime`,
+`break_overtime`, `session_stop`. Scripts run in lexical filename order
+(prefix with `10-`, `20-`, …).
 
-Ready-made examples (macOS Focus/`say`/alarm/Emacs, with Linux equivalents and
-a Windows stub) live in `hooks/examples/<event>.d/`. Copy the ones you want:
-
-```
+```sh
 mkdir -p ~/.config/pomo/hooks/pomodoro_start.d
-cp hooks/examples/pomodoro_start.d/10-focus-on.sh ~/.config/pomo/hooks/pomodoro_start.d/
+cp hooks/examples/pomodoro_start.d/10-focus-on.sh \
+   ~/.config/pomo/hooks/pomodoro_start.d/
 chmod +x ~/.config/pomo/hooks/pomodoro_start.d/10-focus-on.sh
 ```
 
-Each script gets context two ways:
+Examples included in `hooks/examples/`:
 
-- Env vars: `POMO_EVENT`, `POMO_STATE`, `POMO_START_EPOCH`, `POMO_DURATION`,
+| Event              | Script                | What it does                  |
+|---------------------|----------------------|-------------------------------|
+| `pomodoro_start`   | `10-focus-on.sh`     | Enable macOS Focus / DnD      |
+| `break_start`      | `10-focus-off.sh`    | Disable Focus                 |
+| `break_start`      | `20-launch-emacs.sh` | Open Emacs (idle-time capture) |
+| `pomodoro_overtime` | `10-announce.sh`     | `say` "Time's up" / alarm     |
+| `break_overtime`   | `10-announce.sh`     | `say` "Break's over"          |
+| `session_stop`     | `10-focus-off.sh`    | Disable Focus                 |
+
+Each script receives context:
+
+- **Env vars:** `POMO_EVENT`, `POMO_STATE`, `POMO_START_EPOCH`, `POMO_DURATION`,
   `POMO_MACHINE`, `POMO_ORIGIN_MACHINE`, `POMO_REMOTE` (`0`/`1`),
-  `POMO_SESSION_ID`.
-- The full session as JSON on stdin.
+  `POMO_SESSION_ID`, `POMO_SESSION_PROJECT`.
+- **Stdin:** the full session dict as JSON.
 
-Hooks are best-effort: a failing, missing, or slow hook (killed after
-`hooks.timeout` seconds) never affects the timer or CLI. See
-`hooks/examples/` for starter scripts, and `[hooks]` in `agent.toml.sample`
-to tune `enabled` / `timeout` / `dir`.
+Hooks are best-effort: a failing, missing, or slow script (killed after
+`hooks.timeout` seconds) never affects the timer or CLI. Tune via `[hooks]`
+in `agent.toml.sample`.
+
+---
 
 ## Config & paths
 
-- **Config:** `~/.config/pomo/agent.toml` (see `agent.toml.sample`) — `server_url`,
-  `machine_name`, `poll_interval`, `run_for_remote_sessions`, and `[hooks]`.
-- **Cache:** `~/.cache/pomo/` (current session + offline outbox).
-- **Server DB:** `~/.local/share/pomo/pomo.db` (override with `POMO_DB_PATH`).
-- **Env overrides:** `POMO_SERVER_URL` (agent/CLI), `POMO_TOKEN` (bearer auth,
-  both ends), `POMO_PORT` / `POMO_HOST` / `POMO_DB_PATH` (server).
+| What           | Path / env                                  |
+|----------------|----------------------------------------------|
+| Config         | `~/.config/pomo/agent.toml`                 |
+| Cache          | `~/.cache/pomo/` (session + offline outbox)  |
+| Server DB      | `~/.local/share/pomo/pomo.db` (`POMO_DB_PATH`) |
+| Server URL     | `POMO_SERVER_URL` (agent/CLI)                |
+| Bearer token   | `POMO_TOKEN` (server + agents)               |
+| Server port    | `POMO_PORT` (default 8787)                   |
 
-Server endpoints: `GET /current`, `GET /health`, `POST /sessions`,
-`POST /sessions/end`.
+### Config keys (`agent.toml` / `agent.toml.sample`)
+
+| Key                        | Default                | Notes                        |
+|----------------------------|------------------------|------------------------------|
+| `server_url`               | `http://127.0.0.1:8787` | Overridden by `POMO_SERVER_URL` |
+| `machine_name`             | hostname               |                              |
+| `poll_interval`            | 5                      | Seconds, minimum 5            |
+| `run_for_remote_sessions`  | false                  | Fire hooks for sessions started on other machines |
+| `hooks.enabled`            | true                   |                              |
+| `hooks.timeout`            | 10                     | Seconds per hook script       |
+| `hooks.dir`                | `~/.config/pomo/hooks` |                              |
+
+---
+
+## Server API
+
+| Method | Path             | Description                               |
+|--------|-----------------|--------------------------------------------|
+| GET    | `/health`       | `{"ok": true}`                             |
+| GET    | `/current`      | Current session or `{"state": "idle"}`     |
+| GET    | `/sessions`     | Today's sessions (optional `?project=`)     |
+| GET    | `/projects`     | All defined project names                   |
+| POST   | `/sessions`     | Upsert a session (LWW)                      |
+| POST   | `/sessions/end` | End the current session                     |
+
+Auth: optional bearer token via `POMO_TOKEN`.
+
+---
+
+## Architecture
+
+Three small processes share `common.py`:
+
+- **`server.py`** — HTTP/JSON source of truth backed by SQLite with append-only
+  history. Conflicts resolve last-write-wins by timestamp. Runs on one
+  home-base machine.
+- **`agent.py`** — per-machine daemon. Polls the server, owns the local
+  countdown→overtime timer, fires hooks, flushes the offline outbox.
+- **`pomo.py`** — the CLI. Writes the local cache immediately, pushes to the
+  server (or queues to outbox if offline).
+
+Sessions move through states: `pomodoro`/`break` → `overtime`/`break-overtime`
+→ `ended`. Each session has a `kind` (set at creation: `pomodoro` or `break`)
+that survives all transitions, so history always shows the right icon.
+
+Because the timer and hooks are local, everything works with no network.
+
+---
 
 ## Development
 
-Tests are stdlib `unittest`, no dependencies:
+Tests are stdlib `unittest`, zero dependencies:
 
-```
+```sh
 python3 -m unittest discover -s tests -t tests
 ```
 
-CI runs the suite on Python 3.11–3.14. See `AGENTS.md` for architecture notes
-and invariants.
+CI runs the suite on Python 3.11–3.14 + a `compileall` syntax gate. See
+`AGENTS.md` for architecture invariants.
+
+---
 
 ## License
 
-MIT.
+MIT
