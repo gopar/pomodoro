@@ -230,6 +230,32 @@ class LWWTests(unittest.TestCase):
         # Then: empty list
         self.assertEqual(projects, [])
 
+    def test_kind_survives_roundtrip(self):
+        # Given: a pomodoro session with kind="pomodoro"
+        s = _session(100.0, sid="kind-test")
+        s["kind"] = "pomodoro"
+        # When: it is applied and read back
+        server.apply_session(s)
+        current = server.get_current_session()
+        # Then: kind is preserved
+        self.assertEqual(current["kind"], "pomodoro")
+
+    def test_kind_preserved_after_ended(self):
+        # Given: a pomodoro session, then ended
+        s = common.new_session("pomodoro", int(time.time()) - 3600, 60, "laptop")
+        s["updated_at"] = time.time() - 1800
+        s["kind"] = "pomodoro"
+        server.apply_session(s)
+        s2 = dict(s)
+        s2["updated_at"] = time.time() - 1
+        server.end_current(s2)
+        # When: reading today's sessions
+        sessions = server.get_today_sessions()
+        # Then: the ended record still has kind="pomodoro"
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["kind"], "pomodoro")
+        self.assertEqual(sessions[0]["state"], "ended")
+
 
 class ConcurrencyTests(unittest.TestCase):
     """LWW must hold under concurrent writers.

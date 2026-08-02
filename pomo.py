@@ -235,14 +235,13 @@ def cmd_history(json_output: bool = False,
         return
 
     icon_map = {
-        "pomodoro": "🍅", "overtime": "⏰",
-        "break": "☕", "break-overtime": "☕",
-        "ended": "",
+        "pomodoro": "🍅",
+        "break": "☕",
     }
     date_str = datetime.fromtimestamp(int(sessions[0]["start_epoch"])).strftime("%Y-%m-%d")
     print(date_str)
     for s in sessions:
-        icon = icon_map.get(s["state"], "")
+        icon = icon_map.get(s.get("kind") or "", "")
         dur = _fmt_time(max(0, int((s.get("ended_at") or time.time()) - int(s["start_epoch"]))))
         label_parts = []
         p = s.get("project")

@@ -66,6 +66,7 @@ def new_session(state: str, start_epoch: int, duration: int,
     """Build a session record with a fresh id and updated_at."""
     if state not in ALL_STATES:
         raise ValueError(f"invalid state: {state!r}")
+    kind = "break" if state in ("break", "break-overtime") else "pomodoro"
     return {
         "id": str(uuid.uuid4()),
         "state": state,
@@ -76,6 +77,7 @@ def new_session(state: str, start_epoch: int, duration: int,
         "ended_at": None,
         "name": name,
         "project": project,
+        "kind": kind,
     }
 
 

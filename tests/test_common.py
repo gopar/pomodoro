@@ -63,6 +63,33 @@ class SessionModelTests(unittest.TestCase):
         # Then: project is stored
         self.assertEqual(s["project"], "website")
 
+    def test_new_session_kind_is_pomodoro(self):
+        # When: a pomodoro session is created
+        s = common.new_session("pomodoro", 1000, 60, "laptop")
+        # Then: kind is "pomodoro"
+        self.assertEqual(s["kind"], "pomodoro")
+
+    def test_new_session_kind_is_break(self):
+        # When: a break session is created
+        s = common.new_session("break", 1000, 60, "laptop")
+        # Then: kind is "break"
+        self.assertEqual(s["kind"], "break")
+
+    def test_new_session_overtime_kind_is_pomodoro(self):
+        # When: a pomodoro transitions to overtime via the agent
+        # Then: the kind should be derived from the original state
+        s = common.new_session("pomodoro", 1000, 60, "laptop")
+        s["state"] = "overtime"
+        # kind is still "pomodoro" because it was set at creation
+        self.assertEqual(s["kind"], "pomodoro")
+
+    def test_new_session_break_overtime_kind_is_break(self):
+        # When: a break enters overtime
+        s = common.new_session("break", 1000, 60, "laptop")
+        s["state"] = "break-overtime"
+        # kind is still "break"
+        self.assertEqual(s["kind"], "break")
+
 
 class CacheTests(unittest.TestCase):
     def setUp(self):
