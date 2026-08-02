@@ -17,6 +17,7 @@ import os
 import socket
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -60,7 +61,8 @@ def ensure_dirs() -> None:
 # ---------------------------------------------------------------------------
 
 def new_session(state: str, start_epoch: int, duration: int,
-                origin_machine: str, name: str | None = None) -> dict:
+                origin_machine: str, name: str | None = None,
+                project: str | None = None) -> dict:
     """Build a session record with a fresh id and updated_at."""
     if state not in ALL_STATES:
         raise ValueError(f"invalid state: {state!r}")
@@ -73,6 +75,7 @@ def new_session(state: str, start_epoch: int, duration: int,
         "updated_at": time.time(),
         "ended_at": None,
         "name": name,
+        "project": project,
     }
 
 
@@ -269,5 +272,12 @@ def post_end(server_url: str, session: dict) -> dict:
     return _request("POST", server_url.rstrip("/") + "/sessions/end", session)
 
 
-def get_sessions(server_url: str) -> list:
-    return _request("GET", server_url.rstrip("/") + "/sessions")
+def get_sessions(server_url: str, project: str | None = None) -> list:
+    url = server_url.rstrip("/") + "/sessions"
+    if project:
+        url += "?" + urllib.parse.urlencode({"project": project})
+    return _request("GET", url)
+
+
+def get_projects(server_url: str) -> list:
+    return _request("GET", server_url.rstrip("/") + "/projects")

@@ -31,6 +31,7 @@ import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
@@ -97,6 +98,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE sessions ADD COLUMN name TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN project TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def _row_to_session(row: sqlite3.Row) -> dict:
@@ -109,6 +114,7 @@ def _row_to_session(row: sqlite3.Row) -> dict:
         "updated_at": row["updated_at"],
         "ended_at": row["ended_at"],
         "name": row["name"],
+        "project": row["project"],
     }
 
 
@@ -167,12 +173,13 @@ def apply_session(session: dict) -> tuple[bool, dict]:
             # Always record history (even losers) for a faithful log.
             conn.execute(
                 "INSERT OR REPLACE INTO sessions "
-                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at, name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at, name, project) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     session["id"], session["state"], int(session["start_epoch"]),
                     int(session["duration"]), session["origin_machine"],
                     incoming, session.get("ended_at"), session.get("name"),
+                    session.get("project"),
                 ),
             )
             cur = conn.execute(
@@ -198,24 +205,46 @@ def end_current(session: dict) -> tuple[bool, dict]:
     return apply_session(ended)
 
 
-def get_today_sessions() -> list[dict]:
+def get_today_sessions(project: str | None = None) -> list[dict]:
     with contextlib.closing(_connect()) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
+        params: list = []
+        sql = """
             SELECT s.*
             FROM sessions s
             INNER JOIN (
                 SELECT id, MAX(updated_at) AS max_updated
                 FROM sessions
                 WHERE date(start_epoch, 'unixepoch') = date('now')
-                GROUP BY id
+                {} GROUP BY id
             ) latest ON s.id = latest.id AND s.updated_at = latest.max_updated
             WHERE date(s.start_epoch, 'unixepoch') = date('now')
-            ORDER BY s.start_epoch ASC
-            """
+            {} ORDER BY s.start_epoch ASC
+        """
+        project_inner = ""
+        project_outer = ""
+        if project is not None:
+            project_inner = "AND project = ?"
+            project_outer = "AND s.project = ?"
+            params = [project, project]
+        rows = conn.execute(
+            sql.format(project_inner, project_outer), params
         ).fetchall()
     return [_row_to_session(r) for r in rows]
+
+
+def get_projects() -> list[dict]:
+    with contextlib.closing(_connect()) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT DISTINCT project
+            FROM sessions
+            WHERE project IS NOT NULL
+            ORDER BY project ASC
+            """
+        ).fetchall()
+    return [{"project": r["project"]} for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -257,12 +286,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._authorized():
             return self._send_json({"error": "unauthorized"}, 401)
-        if self.path == "/health":
+        parsed = urlparse(self.path)
+        path = parsed.path
+        qs = parse_qs(parsed.query)
+        if path == "/health":
             return self._send_json({"ok": True})
-        if self.path == "/current":
+        if path == "/current":
             return self._send_json(get_current_session())
-        if self.path == "/sessions":
-            return self._send_json(get_today_sessions())
+        if path == "/sessions":
+            project = qs.get("project", [None])[0]
+            return self._send_json(get_today_sessions(project=project))
+        if path == "/projects":
+            return self._send_json(get_projects())
         return self._send_json({"error": "not found"}, 404)
 
     def do_POST(self):

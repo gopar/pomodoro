@@ -183,6 +183,53 @@ class LWWTests(unittest.TestCase):
         # Then: empty list
         self.assertEqual(sessions, [])
 
+    def test_project_survives_roundtrip(self):
+        # Given: a session is created with a project
+        s = _session(100.0, sid="proj")
+        s["project"] = "website"
+        # When: it is applied and read back
+        server.apply_session(s)
+        current = server.get_current_session()
+        # Then: project is preserved
+        self.assertEqual(current["project"], "website")
+
+    def test_get_today_sessions_filters_by_project(self):
+        # Given: sessions with different projects today
+        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop",
+                                project="website")
+        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop",
+                                project="backend")
+        server.apply_session(s1)
+        server.apply_session(s2)
+        # When: get_today_sessions is called with project filter
+        filtered = server.get_today_sessions(project="website")
+        # Then: only matching sessions are returned
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["project"], "website")
+
+    def test_get_projects_returns_distinct(self):
+        # Given: sessions with various projects
+        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop",
+                                project="website")
+        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop",
+                                project="backend")
+        s3 = common.new_session("pomodoro", int(time.time()) - 180, 60, "laptop",
+                                project="website")
+        server.apply_session(s1)
+        server.apply_session(s2)
+        server.apply_session(s3)
+        # When: get_projects is called
+        projects = server.get_projects()
+        # Then: distinct projects sorted alphabetically
+        self.assertEqual(projects, [{"project": "backend"}, {"project": "website"}])
+
+    def test_get_projects_empty_when_none(self):
+        # Given: no sessions with projects exist
+        # When: get_projects is called
+        projects = server.get_projects()
+        # Then: empty list
+        self.assertEqual(projects, [])
+
 
 class ConcurrencyTests(unittest.TestCase):
     """LWW must hold under concurrent writers.

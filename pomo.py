@@ -71,20 +71,24 @@ def _fmt_time(seconds: int) -> str:
 # actions
 # ---------------------------------------------------------------------------
 
-def start_pomodoro(mins: int, name: str | None = None) -> None:
+def start_pomodoro(mins: int, name: str | None = None,
+                   project: str | None = None) -> None:
     cfg = _cfg()
     session = common.new_session("pomodoro", int(time.time()), mins * 60,
-                                 cfg["machine_name"], name=name)
+                                 cfg["machine_name"], name=name,
+                                 project=project)
     common.write_cache(session)
     hooks.dispatch(hooks.POMODORO_START, session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
 
-def start_break(mins: int, name: str | None = None) -> None:
+def start_break(mins: int, name: str | None = None,
+                project: str | None = None) -> None:
     cfg = _cfg()
     session = common.new_session("break", int(time.time()), mins * 60,
-                                 cfg["machine_name"], name=name)
+                                 cfg["machine_name"], name=name,
+                                 project=project)
     common.write_cache(session)
     hooks.dispatch(hooks.BREAK_START, session, cfg)
     _push("session", session)
@@ -118,24 +122,26 @@ def _confirm_overwrite() -> bool:
 # commands
 # ---------------------------------------------------------------------------
 
-def cmd_start(mins: int, name: str | None = None) -> None:
+def cmd_start(mins: int, name: str | None = None,
+              project: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
     active = _current_active()
     if active and active["state"] in ("pomodoro", "overtime"):
         stop(active)
-    start_pomodoro(mins, name=name)
+    start_pomodoro(mins, name=name, project=project)
 
 
-def cmd_break(mins: int, name: str | None = None) -> None:
+def cmd_break(mins: int, name: str | None = None,
+              project: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
     active = _current_active()
     if active and active["state"] in ("pomodoro", "overtime"):
         stop(active)
-    start_break(mins, name=name)
+    start_break(mins, name=name, project=project)
 
 
 def cmd_clear() -> None:
@@ -158,8 +164,10 @@ def cmd_clear() -> None:
             mins = int(brk)
             break
         print(f"Error: break minutes must be an integer, got '{brk}'", file=sys.stderr)
+    inherited_name = active.get("name") if active else None
+    inherited_project = active.get("project") if active else None
     stop(active)
-    start_break(mins)
+    start_break(mins, name=inherited_name, project=inherited_project)
 
 
 def cmd_status(json_output: bool = False) -> None:
@@ -186,10 +194,13 @@ def cmd_status(json_output: bool = False) -> None:
     if remaining < 0:
         time_str = f"+{time_str}"
     name = session.get("name")
+    project = session.get("project")
+    parts = [icon, time_str]
+    if project:
+        parts.append(f"[{project}]")
     if name:
-        display = f"{icon} {time_str} [{name}]"
-    else:
-        display = f"{icon} {time_str}"
+        parts.append(f"[{name}]")
+    display = " ".join(parts)
 
     if json_output:
         print(json.dumps({
@@ -200,15 +211,17 @@ def cmd_status(json_output: bool = False) -> None:
             "remaining": remaining,
             "display": display,
             "name": name,
+            "project": project,
         }))
     else:
         print(display)
 
 
-def cmd_history(json_output: bool = False) -> None:
+def cmd_history(json_output: bool = False,
+                project: str | None = None) -> None:
     cfg = _cfg()
     try:
-        sessions = common.get_sessions(cfg["server_url"])
+        sessions = common.get_sessions(cfg["server_url"], project=project)
     except common.ServerUnavailable:
         sys.stderr.write("Error: server unavailable\n")
         sys.exit(1)
@@ -231,12 +244,38 @@ def cmd_history(json_output: bool = False) -> None:
     for s in sessions:
         icon = icon_map.get(s["state"], "")
         dur = _fmt_time(int(s["duration"]))
+        label_parts = []
+        p = s.get("project")
+        if p:
+            label_parts.append(f"[{p}]")
         name = s.get("name")
-        name_str = f" [{name}]" if name else ""
+        if name:
+            label_parts.append(f"[{name}]")
+        label_str = " " + " ".join(label_parts) if label_parts else ""
         start_str = datetime.fromtimestamp(int(s["start_epoch"])).strftime("%H:%M")
         end_epoch = s.get("ended_at") or (int(s["start_epoch"]) + int(s["duration"]))
         end_str = datetime.fromtimestamp(int(end_epoch)).strftime("%H:%M")
-        print(f"  {icon}  {dur}{name_str}  {start_str} – {end_str}")
+        print(f"  {icon}  {dur}{label_str}  {start_str} – {end_str}")
+
+
+def cmd_projects(json_output: bool = False) -> None:
+    cfg = _cfg()
+    try:
+        projects = common.get_projects(cfg["server_url"])
+    except common.ServerUnavailable:
+        sys.stderr.write("Error: server unavailable\n")
+        sys.exit(1)
+
+    if json_output:
+        print(json.dumps(projects))
+        return
+
+    if not projects:
+        print("No projects defined.")
+        return
+
+    for p in projects:
+        print(p["project"])
 
 
 def _argparser() -> argparse.ArgumentParser:
@@ -249,10 +288,12 @@ def _argparser() -> argparse.ArgumentParser:
     p = sub.add_parser("start", help="Start a pomodoro for N minutes")
     p.add_argument("minutes", type=int, help="Duration in minutes")
     p.add_argument("-n", "--name", help="Optional session name")
+    p.add_argument("-p", "--project", help="Optional project name")
 
     p = sub.add_parser("break", help="Start a break for N minutes")
     p.add_argument("minutes", type=int, help="Duration in minutes")
     p.add_argument("-n", "--name", help="Optional session name")
+    p.add_argument("-p", "--project", help="Optional project name")
 
     sub.add_parser("clear", help="Stop current session, optionally start a break")
 
@@ -260,6 +301,10 @@ def _argparser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
     p = sub.add_parser("history", help="Show today's session history")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+    p.add_argument("-p", "--project", help="Filter by project")
+
+    p = sub.add_parser("projects", help="List all defined projects")
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
     return parser
@@ -270,15 +315,17 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "start":
-        cmd_start(args.minutes, name=args.name)
+        cmd_start(args.minutes, name=args.name, project=args.project)
     elif args.command == "break":
-        cmd_break(args.minutes, name=args.name)
+        cmd_break(args.minutes, name=args.name, project=args.project)
     elif args.command == "clear":
         cmd_clear()
     elif args.command == "status":
         cmd_status(json_output=args.json)
     elif args.command == "history":
-        cmd_history(json_output=args.json)
+        cmd_history(json_output=args.json, project=args.project)
+    elif args.command == "projects":
+        cmd_projects(json_output=args.json)
     else:
         parser.print_help()
 

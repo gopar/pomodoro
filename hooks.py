@@ -77,6 +77,7 @@ def _build_env(event: str, session: dict, remote: bool) -> dict:
     env["POMO_DURATION"] = str(session.get("duration", ""))
     env["POMO_ORIGIN_MACHINE"] = str(session.get("origin_machine", ""))
     env["POMO_SESSION_ID"] = str(session.get("id", ""))
+    env["POMO_SESSION_PROJECT"] = str(session.get("project", ""))
     env["POMO_REMOTE"] = "1" if remote else "0"
     return env
 

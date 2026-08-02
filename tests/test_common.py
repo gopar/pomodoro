@@ -51,6 +51,18 @@ class SessionModelTests(unittest.TestCase):
         # Then: name is stored
         self.assertEqual(s["name"], "project-x")
 
+    def test_new_session_project_defaults_to_none(self):
+        # When: a new session is created without a project
+        s = common.new_session("pomodoro", 1000, 60, "laptop")
+        # Then: project is None
+        self.assertIsNone(s["project"])
+
+    def test_new_session_project_is_stored(self):
+        # When: a new session is created with a project
+        s = common.new_session("pomodoro", 1000, 60, "laptop", project="website")
+        # Then: project is stored
+        self.assertEqual(s["project"], "website")
+
 
 class CacheTests(unittest.TestCase):
     def setUp(self):

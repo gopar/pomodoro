@@ -105,6 +105,19 @@ class HooksTests(unittest.TestCase):
         # Then: scripts run in lexical filename order (10-a before 20-b)
         self.assertEqual(out.read_text(encoding="utf-8"), "ab")
 
+    def test_hook_receives_project_env_var(self):
+        # Given: a hook script that captures POMO_SESSION_PROJECT
+        out = self.tmp / "proj.txt"
+        _write_hook(
+            self._event_dir(hooks.POMODORO_START), "10-proj.sh",
+            f"#!/usr/bin/env bash\nprintf '%s' \"$POMO_SESSION_PROJECT\" > {out}\n",
+        )
+        # When: dispatch fires with a session that has a project
+        session = common.new_session("pomodoro", 1, 60, "laptop", project="website")
+        hooks.dispatch(hooks.POMODORO_START, session, self.cfg)
+        # Then: POMO_SESSION_PROJECT is set
+        self.assertEqual(out.read_text(encoding="utf-8"), "website")
+
 
 if __name__ == "__main__":
     unittest.main()
