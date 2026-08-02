@@ -17,6 +17,7 @@ Behavior:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
@@ -116,10 +117,7 @@ def _confirm_overwrite() -> bool:
 # commands
 # ---------------------------------------------------------------------------
 
-def cmd_start(args: list[str]) -> None:
-    if len(args) != 1:
-        usage()
-    mins = _require_int(args[0], "minutes")
+def cmd_start(mins: int) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
@@ -129,10 +127,7 @@ def cmd_start(args: list[str]) -> None:
     start_pomodoro(mins)
 
 
-def cmd_break(args: list[str]) -> None:
-    if len(args) != 1:
-        usage()
-    mins = _require_int(args[0], "minutes")
+def cmd_break(mins: int) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
@@ -162,10 +157,10 @@ def cmd_clear() -> None:
     start_break(mins)
 
 
-def cmd_status(args: list[str]) -> None:
+def cmd_status(json_output: bool = False) -> None:
     session = common.read_cache()
     if common.is_idle(session):
-        if "--json" in args:
+        if json_output:
             print(json.dumps({"state": "idle", "display": "No active session"}))
         else:
             print("No active session")
@@ -187,7 +182,7 @@ def cmd_status(args: list[str]) -> None:
         time_str = f"+{time_str}"
     display = f"{icon} {time_str}"
 
-    if "--json" in args:
+    if json_output:
         print(json.dumps({
             "state": effective_state,
             "start_epoch": start,
@@ -200,29 +195,41 @@ def cmd_status(args: list[str]) -> None:
         print(display)
 
 
-def usage() -> None:
-    sys.stderr.write(
-        "Usage:\n"
-        "  pomo <minutes>        Start pomodoro\n"
-        "  pomo break <minutes>  Start a break\n"
-        "  pomo clear            Stop & clear pomodoro (prompts for a break)\n"
-        "  pomo status [--json]  Show current session status\n"
+def _argparser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="pomo",
+        description="Start, stop, and track pomodoro sessions.",
     )
-    sys.exit(1)
+    sub = parser.add_subparsers(dest="command")
+
+    p = sub.add_parser("start", help="Start a pomodoro for N minutes")
+    p.add_argument("minutes", type=int, help="Duration in minutes")
+
+    p = sub.add_parser("break", help="Start a break for N minutes")
+    p.add_argument("minutes", type=int, help="Duration in minutes")
+
+    sub.add_parser("clear", help="Stop current session, optionally start a break")
+
+    p = sub.add_parser("status", help="Show current session status")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+
+    return parser
 
 
-def main(argv: list[str]) -> None:
-    if not argv:
-        usage()
-    cmd = argv[0]
-    if cmd == "clear":
+def main(argv: list[str] | None = None) -> None:
+    parser = _argparser()
+    args = parser.parse_args(argv)
+
+    if args.command == "start":
+        cmd_start(args.minutes)
+    elif args.command == "break":
+        cmd_break(args.minutes)
+    elif args.command == "clear":
         cmd_clear()
-    elif cmd == "break":
-        cmd_break(argv[1:])
-    elif cmd == "status":
-        cmd_status(argv[1:])
+    elif args.command == "status":
+        cmd_status(json_output=args.json)
     else:
-        cmd_start(argv)
+        parser.print_help()
 
 
 if __name__ == "__main__":

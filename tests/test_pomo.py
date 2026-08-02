@@ -75,7 +75,7 @@ class CmdBreakTests(Base):
         # Given: an active pomodoro
         self._active("pomodoro")
         # When: pomo break 5 is run
-        pomo.cmd_break(["5"])
+        pomo.cmd_break(5)
         # Then: session_stop fires first, then break_start
         self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.BREAK_START])
         # Then: cache has the break session
@@ -133,7 +133,7 @@ class CmdStartTests(Base):
         # Given: an active pomodoro
         self._active("pomodoro")
         # When: pomo 25 is run
-        pomo.cmd_start(["25"])
+        pomo.cmd_start(25)
         # Then: session_stop fires, then pomodoro_start (this was already correct)
         self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.POMODORO_START])
         self._assert_cache_state("pomodoro")
@@ -146,19 +146,19 @@ class CmdStatusTests(Base):
         patch_attr(self, time, "time", lambda: ts)
 
     def test_status_json_idle_no_cache(self):
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         self.assertEqual(json.loads(self._stdout.getvalue()),
                          {"state": "idle", "display": "No active session"})
 
     def test_status_json_idle_ended_cache(self):
         common.write_cache({"state": "ended"})
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         self.assertEqual(json.loads(self._stdout.getvalue()),
                          {"state": "idle", "display": "No active session"})
 
     def test_status_json_idle_marker_cache(self):
         common.write_cache({"state": "idle"})
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         self.assertEqual(json.loads(self._stdout.getvalue()),
                          {"state": "idle", "display": "No active session"})
 
@@ -169,7 +169,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "pomodoro")
         self.assertEqual(out["start_epoch"], int(now - 60))
@@ -186,7 +186,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "overtime")
         self.assertEqual(out["remaining"], -10)
@@ -199,7 +199,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "break")
         self.assertEqual(out["remaining"], duration - 30)
@@ -213,7 +213,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "break-overtime")
         self.assertEqual(out["remaining"], -5)
@@ -227,7 +227,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "overtime")
         self.assertEqual(out["remaining"], -30)
@@ -240,12 +240,12 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status(["--json"])
+        pomo.cmd_status(json_output=True)
         json_display = json.loads(self._stdout.getvalue())["display"]
 
         self._stdout.truncate(0)
         self._stdout.seek(0)
-        pomo.cmd_status([])
+        pomo.cmd_status()
         human = self._stdout.getvalue().strip()
 
         self.assertEqual(json_display, human)
@@ -257,7 +257,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status([])
+        pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00")
 
     def test_status_human_overtime(self):
@@ -268,7 +268,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status([])
+        pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "⏰ +1:05")
 
     def test_status_human_break_countdown(self):
@@ -278,7 +278,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status([])
+        pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "☕ 4:30")
 
     def test_status_human_break_overtime_uses_coffee(self):
@@ -289,14 +289,14 @@ class CmdStatusTests(Base):
         common.write_cache(s)
         self._freeze_time(now)
 
-        pomo.cmd_status([])
+        pomo.cmd_status()
         output = self._stdout.getvalue().strip()
         self.assertIn("☕", output)
         self.assertIn("+", output)
         self.assertEqual(output, "☕ +0:10")
 
     def test_status_human_idle(self):
-        pomo.cmd_status([])
+        pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "No active session")
 
 
