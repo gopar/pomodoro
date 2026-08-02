@@ -100,15 +100,26 @@ class CmdClearTests(Base):
         # Then: cache has the break session
         self._assert_cache_state("break")
 
-    @patch.object(builtins, "input", side_effect=["x"])
-    def test_clear_invalid_break_input_exits_and_keeps_pomodoro(self, _mock):
-        # Given: an active pomodoro, user enters non-numeric "x"
+    @patch.object(builtins, "input", side_effect=["x", "5"])
+    def test_clear_invalid_then_valid_break(self, _mock):
+        # Given: an active pomodoro
+        # When: user enters invalid "x" (re-prompted), then valid "5"
         self._active("pomodoro")
-        # When / Then: SystemExit raised, pomodoro stays active
-        with self.assertRaises(SystemExit):
-            pomo.cmd_clear()
-        self.assertEqual(self.events, [])
-        self._assert_cache_state("pomodoro")
+        pomo.cmd_clear()
+        # Then: session_stop and break_start fire; cache has break session
+        self.assertEqual(self.events, [hooks.SESSION_STOP, hooks.BREAK_START])
+        self._assert_cache_state("break")
+
+    @patch.object(builtins, "input", side_effect=["x", "y", ""])
+    def test_clear_invalid_then_empty_clears_pomodoro(self, _mock):
+        # Given: an active pomodoro
+        # When: user enters invalid "x" (re-prompted), "y" (re-prompted),
+        #       then "" (skip)
+        self._active("pomodoro")
+        pomo.cmd_clear()
+        # Then: session_stop fires, no break, cache cleared
+        self.assertEqual(self.events, [hooks.SESSION_STOP])
+        self._assert_cache_state(None)
 
     @patch.object(builtins, "input", side_effect=[""])
     def test_clear_no_break_stops_pomodoro(self, _mock):
@@ -126,6 +137,39 @@ class CmdClearTests(Base):
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires, cache cleared (this was already correct)
+        self.assertEqual(self.events, [hooks.SESSION_STOP])
+        self._assert_cache_state(None)
+
+    @patch.object(builtins, "input", side_effect=[""])
+    def test_clear_when_idle_is_noop(self, _mock):
+        # Given: no active session (cache is empty/idle)
+        common.clear_cache()
+        # When: pomo clear is run with empty input (skip break)
+        pomo.cmd_clear()
+        # Then: no hooks fire, no pushes, no crash
+        self.assertEqual(self.events, [])
+        self._assert_cache_state(None)
+
+
+class StopFunctionTests(Base):
+    """stop() — low-level session teardown."""
+
+    def test_stop_with_none_is_noop(self):
+        # Given: nothing active
+        common.clear_cache()
+        # When: stop(None) is called
+        pomo.stop(None)
+        # Then: no hooks fire, no pushes, cache unchanged
+        self.assertEqual(self.events, [])
+        self._assert_cache_state(None)
+
+    def test_stop_active_session_clears_and_fires_hook(self):
+        # Given: an active pomodoro
+        self._active("pomodoro")
+        session = common.read_cache()
+        # When: stop is called with the active session
+        pomo.stop(session)
+        # Then: session_stop fires, cache cleared
         self.assertEqual(self.events, [hooks.SESSION_STOP])
         self._assert_cache_state(None)
 

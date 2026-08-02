@@ -1,4 +1,4 @@
-"""Behavior tests for hooks.py: dispatch/fire run user scripts with the right
+"""Behavior tests for hooks.py: dispatch runs user scripts with the right
 context, and stay best-effort."""
 
 from __future__ import annotations

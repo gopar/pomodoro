@@ -92,10 +92,10 @@ def start_break(mins: int, name: str | None = None) -> None:
 
 
 def stop(session: dict | None) -> None:
+    if session is None:
+        return
     cfg = _cfg()
-    end = session or common.new_session("ended", int(time.time()), 0,
-                                        cfg["machine_name"])
-    end = dict(end)
+    end = dict(session)
     end["state"] = "ended"
     end["updated_at"] = time.time()
     end["ended_at"] = time.time()
@@ -145,15 +145,19 @@ def cmd_clear() -> None:
         stop(active)
         print("Break cleared 🧹")
         return
-    try:
-        brk = input("Break minutes? (empty to skip): ").strip()
-    except EOFError:
-        brk = ""
-    if not brk:
-        stop(active)
-        print("Pomodoro cleared 🧹")
-        return
-    mins = _require_int(brk, "break minutes")
+    while True:
+        try:
+            brk = input("Break minutes? (empty to skip): ").strip()
+        except EOFError:
+            brk = ""
+        if not brk:
+            stop(active)
+            print("Pomodoro cleared 🧹")
+            return
+        if brk.isdigit():
+            mins = int(brk)
+            break
+        print(f"Error: break minutes must be an integer, got '{brk}'", file=sys.stderr)
     stop(active)
     start_break(mins)
 
