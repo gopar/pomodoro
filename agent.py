@@ -25,6 +25,9 @@ import time
 import traceback
 from pathlib import Path
 
+if sys.version_info < (3, 11):
+    sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
 import hooks  # noqa: E402
