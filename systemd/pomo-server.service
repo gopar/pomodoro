@@ -20,8 +20,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env python3 %h/.config/pomo/server.py
-Restart=always
+# Hardcode the full python3 path (more reliable than ``/usr/bin/env``):
+ExecStart=/opt/homebrew/bin/python3 %h/.config/pomo/server.py
+Restart=on-failure
 RestartSec=5
 Environment=POMO_PORT=8787
 Environment=POMO_HOST=0.0.0.0

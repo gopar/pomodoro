@@ -23,8 +23,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env python3 %h/.config/pomo/agent.py
-Restart=always
+# Hardcode the full python3 path (more reliable than ``/usr/bin/env``):
+ExecStart=/opt/homebrew/bin/python3 %h/.config/pomo/agent.py
+Restart=on-failure
 RestartSec=5
 # Optional overrides (otherwise agent.toml is used):
 # Environment=POMO_SERVER_URL=http://home-base:8787
