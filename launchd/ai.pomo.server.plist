@@ -11,7 +11,10 @@
 
   Adjust POMO_PORT / POMO_TOKEN below as needed.
 
-  REPLACE THE PATHS BELOW — see ProgramArguments key.
+  UPDATE THE PYTHON3 PATH — replace /opt/homebrew/bin/python3 with the
+  output of ``which python3`` if your python3 lives elsewhere
+  (e.g. /usr/local/bin/python3 on Intel Macs).
+  Likewise replace /Users/gopar with your home directory.
 -->
 <plist version="1.0">
 <dict>
@@ -19,10 +22,10 @@
     <string>ai.pomo.server</string>
     <key>ProgramArguments</key>
     <array>
-        <!-- Replace with your username and the path to your pomo checkout. -->
-        <string>/usr/bin/env</string>
-        <string>python3</string>
-        <string>/Users/REPLACE_WITH_YOUR_USER/.config/pomo/server.py</string>
+        <!-- Hardcode the full python3 path (launchd's default PATH is too
+             narrow for ``/usr/bin/env python3`` to find Homebrew python). -->
+        <string>/opt/homebrew/bin/python3</string>
+        <string>/Users/gopar/.config/pomo/server.py</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
@@ -37,8 +40,16 @@
     </dict>
     <key>RunAtLoad</key>
     <true/>
+    <!-- Only restart on crash (non-zero exit), not on clean shutdown.
+         Prevents restart storms when the process exits intentionally. -->
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <!-- Minimum interval between restarts to let TIME_WAIT sockets clear. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>StandardOutPath</key>
     <string>/tmp/pomo-server.out.log</string>
     <key>StandardErrorPath</key>
