@@ -39,6 +39,11 @@ class LWWTests(unittest.TestCase):
         self.addCleanup(p.stop)
         server.init_db()
 
+    def test_version_is_set(self):
+        v = common.version()
+        self.assertTrue(v)
+        self.assertNotEqual(v, "unknown")
+
     def test_apply_missing_field_raises(self):
         # When: apply_session is called with a dict missing required fields
         # Then: ValueError is raised

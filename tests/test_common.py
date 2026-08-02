@@ -12,6 +12,11 @@ import common
 
 
 class SessionModelTests(unittest.TestCase):
+    def test_version_returns_value(self):
+        v = common.version()
+        self.assertTrue(v, "VERSION file missing or empty")
+        self.assertNotEqual(v, "unknown")
+
     def test_is_idle(self):
         # Given: no state, idle markers, ended markers, and active states
         # When / Then: only active states are not idle

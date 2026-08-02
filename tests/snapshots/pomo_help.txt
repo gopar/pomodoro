@@ -1,4 +1,4 @@
-usage: pomo [-h] {start,break,clear,status,history,projects} ...
+usage: pomo [-h] [--version] {start,break,clear,status,history,projects} ...
 
 Start, stop, and track pomodoro sessions.
 
@@ -13,3 +13,4 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  --version             show program's version number and exit

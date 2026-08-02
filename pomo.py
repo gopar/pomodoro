@@ -282,6 +282,8 @@ def _argparser() -> argparse.ArgumentParser:
         prog="pomo",
         description="Start, stop, and track pomodoro sessions.",
     )
+    parser.add_argument("--version", action="version",
+                        version=f"pomo v{common.version()}")
     sub = parser.add_subparsers(dest="command")
 
     p = sub.add_parser("start", help="Start a pomodoro for N minutes")

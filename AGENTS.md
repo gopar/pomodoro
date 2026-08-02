@@ -87,4 +87,12 @@ code. When you add, change, or remove any of these, update `README.md`:
   in `tests/test_hooks.py` (CI fails on mismatch)
 - **Server API endpoints** — no automated check; update manually
 
+## Versioning
+
+When bumping the version:
+
+- Update the `VERSION` file
+- Commit as `vX.Y.Z`
+- (optional) `git tag vX.Y.Z`
+
 See `README.md` for the setup/launchd flow and hook details.

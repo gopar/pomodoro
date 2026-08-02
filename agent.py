@@ -141,7 +141,8 @@ def loop() -> None:
     cfg = common.load_config()
     interval = _poll_interval(cfg)
     sys.stderr.write(
-        f"pomo-agent: machine={cfg['machine_name']} server={cfg['server_url']} "
+        f"pomo-agent: v{common.version()} machine={cfg['machine_name']} "
+        f"server={cfg['server_url']} "
         f"interval={interval}s\n"
     )
     while True:

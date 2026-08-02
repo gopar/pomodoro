@@ -296,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
         if path == "/health":
             return self._send_json({"ok": True})
+        if path == "/version":
+            return self._send_json({"version": common.version()})
         if path == "/current":
             return self._send_json(get_current_session())
         if path == "/sessions":
@@ -330,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     init_db()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    sys.stderr.write(f"pomo-server listening on {HOST}:{PORT} (db={DB_PATH})\n")
+    sys.stderr.write(f"pomo-server v{common.version()} listening on {HOST}:{PORT} (db={DB_PATH})\n")
     if TOKEN:
         sys.stderr.write("auth: bearer token REQUIRED\n")
     else:
