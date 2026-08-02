@@ -72,6 +72,7 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 - Prefer tests that test the behavior and not the internals.
 - When fixing a bug, write a test to verify existing bug and then re-run it to verify it has been fix.
 - Tests isolate all state onto a temp dir via `tests/_util.py` (patches path
-  globals in `common`/`server`); they never touch real `~`.
+  globals in `common`/`server`); they never touch real `~`.`
+- When adding tests use Gherkin style comments (Given, When, Then, etc)
 
 See `README.md` for the setup/launchd flow and hook details.
