@@ -21,6 +21,7 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -200,6 +201,40 @@ def cmd_status(json_output: bool = False) -> None:
         print(display)
 
 
+def cmd_history(json_output: bool = False) -> None:
+    cfg = _cfg()
+    try:
+        sessions = common.get_sessions(cfg["server_url"])
+    except common.ServerUnavailable:
+        sys.stderr.write("Error: server unavailable\n")
+        sys.exit(1)
+
+    if json_output:
+        print(json.dumps(sessions))
+        return
+
+    if not sessions:
+        print("No sessions today.")
+        return
+
+    icon_map = {
+        "pomodoro": "🍅", "overtime": "⏰",
+        "break": "☕", "break-overtime": "☕",
+        "ended": "",
+    }
+    date_str = datetime.fromtimestamp(int(sessions[0]["start_epoch"])).strftime("%Y-%m-%d")
+    print(date_str)
+    for s in sessions:
+        icon = icon_map.get(s["state"], "")
+        dur = _fmt_time(int(s["duration"]))
+        name = s.get("name")
+        name_str = f" [{name}]" if name else ""
+        start_str = datetime.fromtimestamp(int(s["start_epoch"])).strftime("%H:%M")
+        end_epoch = s.get("ended_at") or (int(s["start_epoch"]) + int(s["duration"]))
+        end_str = datetime.fromtimestamp(int(end_epoch)).strftime("%H:%M")
+        print(f"  {icon}  {dur}{name_str}  {start_str} – {end_str}")
+
+
 def _argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pomo",
@@ -220,6 +255,9 @@ def _argparser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="Show current session status")
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
+    p = sub.add_parser("history", help="Show today's session history")
+    p.add_argument("--json", action="store_true", help="Output as JSON")
+
     return parser
 
 
@@ -235,6 +273,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_clear()
     elif args.command == "status":
         cmd_status(json_output=args.json)
+    elif args.command == "history":
+        cmd_history(json_output=args.json)
     else:
         parser.print_help()
 

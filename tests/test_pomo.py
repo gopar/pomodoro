@@ -12,6 +12,7 @@ import json
 import sys
 import time
 import unittest
+from datetime import datetime
 
 from _util import isolate, patch_attr
 
@@ -326,6 +327,59 @@ class CmdStatusTests(Base):
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["name"], "project-x")
         self.assertEqual(out["display"], "🍅 24:00 [project-x]")
+
+
+class CmdHistoryTests(Base):
+    """pomo history — today's session timeline."""
+
+    def test_history_human_output(self):
+        # Given: a named pomodoro session from today
+        now = 1722520000.0
+        s = common.new_session("pomodoro", int(now), 25 * 60, "laptop", name="fix-auth")
+        s["ended_at"] = now + 25 * 60
+        patch_attr(self, common, "get_sessions", lambda url: [s])
+        # When: pomo history is called
+        pomo.cmd_history()
+        output = self._stdout.getvalue()
+        # Then: output contains expected date, icon, name, duration, and time range
+        expected_date = datetime.fromtimestamp(int(now)).strftime("%Y-%m-%d")
+        expected_start = datetime.fromtimestamp(int(now)).strftime("%H:%M")
+        expected_end = datetime.fromtimestamp(int(now + 25 * 60)).strftime("%H:%M")
+        self.assertIn(expected_date, output)
+        self.assertIn("🍅", output)
+        self.assertIn("[fix-auth]", output)
+        self.assertIn("25:00", output)
+        self.assertIn(expected_start, output)
+        self.assertIn(expected_end, output)
+
+    def test_history_json_output(self):
+        # Given: sessions exist
+        s = common.new_session("pomodoro", 1000, 60, "laptop", name="fix-auth")
+        patch_attr(self, common, "get_sessions", lambda url: [s])
+        # When: pomo history --json is called
+        pomo.cmd_history(json_output=True)
+        out = json.loads(self._stdout.getvalue())
+        # Then: session data is returned as JSON
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["name"], "fix-auth")
+
+    def test_history_empty(self):
+        # Given: no sessions today
+        patch_attr(self, common, "get_sessions", lambda url: [])
+        # When: pomo history is called
+        pomo.cmd_history()
+        # Then: empty message shown
+        self.assertIn("No sessions today", self._stdout.getvalue())
+
+    def test_history_offline_errors(self):
+        # Given: server is unreachable
+        def raise_unavailable(url):
+            raise common.ServerUnavailable("offline")
+        patch_attr(self, common, "get_sessions", raise_unavailable)
+        # When / Then: pomo history exits with an error
+        with self.assertRaises(SystemExit):
+            pomo.cmd_history()
+        self.assertIn("unavailable", self._stderr.getvalue())
 
 
 if __name__ == "__main__":

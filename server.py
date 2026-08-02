@@ -197,6 +197,26 @@ def end_current(session: dict) -> tuple[bool, dict]:
     return apply_session(ended)
 
 
+def get_today_sessions() -> list[dict]:
+    with contextlib.closing(_connect()) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT s.*
+            FROM sessions s
+            INNER JOIN (
+                SELECT id, MAX(updated_at) AS max_updated
+                FROM sessions
+                WHERE date(start_epoch, 'unixepoch') = date('now')
+                GROUP BY id
+            ) latest ON s.id = latest.id AND s.updated_at = latest.max_updated
+            WHERE date(s.start_epoch, 'unixepoch') = date('now')
+            ORDER BY s.start_epoch ASC
+            """
+        ).fetchall()
+    return [_row_to_session(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
@@ -240,6 +260,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True})
         if self.path == "/current":
             return self._send_json(get_current_session())
+        if self.path == "/sessions":
+            return self._send_json(get_today_sessions())
         return self._send_json({"error": "not found"}, 404)
 
     def do_POST(self):

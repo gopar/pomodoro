@@ -6,8 +6,10 @@ concurrent writers (WAL + busy_timeout).
 
 from __future__ import annotations
 
+import datetime
 import sqlite3
 import threading
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
@@ -123,6 +125,45 @@ class LWWTests(unittest.TestCase):
         current = server.get_current_session()
         # Then: name is preserved
         self.assertEqual(current["name"], "project-x")
+
+    def test_get_today_sessions_returns_today_only(self):
+        # Given: a session from today and one from yesterday
+        today_epoch = int(time.time())
+        yesterday_epoch = today_epoch - 90000
+        s_today = common.new_session("pomodoro", today_epoch, 60, "laptop")
+        s_yesterday = common.new_session("pomodoro", yesterday_epoch, 60, "laptop")
+        server.apply_session(s_today)
+        server.apply_session(s_yesterday)
+        # When: get_today_sessions is called
+        sessions = server.get_today_sessions()
+        # Then: only today's session is returned
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["id"], s_today["id"])
+
+    def test_get_today_sessions_deduplicates_to_latest(self):
+        # Given: the same session id written twice today
+        now = int(time.time())
+        start_epoch = now - 60
+        s1 = common.new_session("pomodoro", start_epoch, 60, "laptop")
+        s1["updated_at"] = now - 1
+        s2 = dict(s1)
+        s2["state"] = "ended"
+        s2["updated_at"] = now
+        s2["ended_at"] = now
+        server.apply_session(s1)
+        server.apply_session(s2)
+        # When: get_today_sessions is called
+        sessions = server.get_today_sessions()
+        # Then: only the latest row (ended) is returned
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["state"], "ended")
+
+    def test_get_today_sessions_returns_empty_when_none(self):
+        # Given: no sessions exist
+        # When: get_today_sessions is called
+        sessions = server.get_today_sessions()
+        # Then: empty list
+        self.assertEqual(sessions, [])
 
 
 class ConcurrencyTests(unittest.TestCase):

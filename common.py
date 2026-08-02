@@ -267,3 +267,7 @@ def post_session(server_url: str, session: dict) -> dict:
 
 def post_end(server_url: str, session: dict) -> dict:
     return _request("POST", server_url.rstrip("/") + "/sessions/end", session)
+
+
+def get_sessions(server_url: str) -> list:
+    return _request("GET", server_url.rstrip("/") + "/sessions")
