@@ -299,6 +299,34 @@ class CmdStatusTests(Base):
         pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "No active session")
 
+    def test_status_named_session_display(self):
+        # Given: a named pomodoro session
+        now = 1722520000.0
+        duration = 25 * 60
+        s = common.new_session("pomodoro", int(now - 60), duration,
+                                "laptop", name="project-x")
+        common.write_cache(s)
+        self._freeze_time(now)
+        # When: status is requested
+        pomo.cmd_status()
+        # Then: name appears after the timer
+        self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00 [project-x]")
+
+    def test_status_named_session_json_includes_name(self):
+        # Given: a named pomodoro session
+        now = 1722520000.0
+        duration = 25 * 60
+        s = common.new_session("pomodoro", int(now - 60), duration,
+                                "laptop", name="project-x")
+        common.write_cache(s)
+        self._freeze_time(now)
+        # When: status --json is requested
+        pomo.cmd_status(json_output=True)
+        # Then: JSON output includes name
+        out = json.loads(self._stdout.getvalue())
+        self.assertEqual(out["name"], "project-x")
+        self.assertEqual(out["display"], "🍅 24:00 [project-x]")
+
 
 if __name__ == "__main__":
     unittest.main()

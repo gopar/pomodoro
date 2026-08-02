@@ -93,6 +93,10 @@ def init_db() -> None:
             "INSERT OR IGNORE INTO current (singleton, session_id, updated_at) "
             "VALUES (0, NULL, 0)"
         )
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN name TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def _row_to_session(row: sqlite3.Row) -> dict:
@@ -104,6 +108,7 @@ def _row_to_session(row: sqlite3.Row) -> dict:
         "origin_machine": row["origin_machine"],
         "updated_at": row["updated_at"],
         "ended_at": row["ended_at"],
+        "name": row["name"],
     }
 
 
@@ -161,12 +166,12 @@ def apply_session(session: dict) -> tuple[bool, dict]:
             # Always record history (even losers) for a faithful log.
             conn.execute(
                 "INSERT OR REPLACE INTO sessions "
-                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at, name) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     session["id"], session["state"], int(session["start_epoch"]),
                     int(session["duration"]), session["origin_machine"],
-                    incoming, session.get("ended_at"),
+                    incoming, session.get("ended_at"), session.get("name"),
                 ),
             )
             cur = conn.execute(

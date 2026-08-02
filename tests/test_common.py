@@ -39,6 +39,18 @@ class SessionModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             common.new_session("bogus", 0, 0, "laptop")
 
+    def test_new_session_name_defaults_to_none(self):
+        # When: a new session is created without a name
+        s = common.new_session("pomodoro", 1000, 60, "laptop")
+        # Then: name is None
+        self.assertIsNone(s["name"])
+
+    def test_new_session_name_is_stored(self):
+        # When: a new session is created with a name
+        s = common.new_session("pomodoro", 1000, 60, "laptop", name="project-x")
+        # Then: name is stored
+        self.assertEqual(s["name"], "project-x")
+
 
 class CacheTests(unittest.TestCase):
     def setUp(self):

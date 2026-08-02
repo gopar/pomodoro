@@ -60,7 +60,7 @@ def ensure_dirs() -> None:
 # ---------------------------------------------------------------------------
 
 def new_session(state: str, start_epoch: int, duration: int,
-                origin_machine: str) -> dict:
+                origin_machine: str, name: str | None = None) -> dict:
     """Build a session record with a fresh id and updated_at."""
     if state not in ALL_STATES:
         raise ValueError(f"invalid state: {state!r}")
@@ -72,6 +72,7 @@ def new_session(state: str, start_epoch: int, duration: int,
         "origin_machine": origin_machine,
         "updated_at": time.time(),
         "ended_at": None,
+        "name": name,
     }
 
 

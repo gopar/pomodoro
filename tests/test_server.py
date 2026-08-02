@@ -114,6 +114,16 @@ class LWWTests(unittest.TestCase):
         self.assertEqual(rows[0]["updated_at"], 200.0)  # newer row intact
         self.assertEqual(rows[1]["updated_at"], 100.0)  # stale row also present
 
+    def test_name_survives_roundtrip(self):
+        # Given: a session is created with a name
+        s = _session(100.0, sid="named")
+        s["name"] = "project-x"
+        # When: it is applied and read back
+        server.apply_session(s)
+        current = server.get_current_session()
+        # Then: name is preserved
+        self.assertEqual(current["name"], "project-x")
+
 
 class ConcurrencyTests(unittest.TestCase):
     """LWW must hold under concurrent writers.

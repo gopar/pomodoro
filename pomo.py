@@ -70,20 +70,20 @@ def _fmt_time(seconds: int) -> str:
 # actions
 # ---------------------------------------------------------------------------
 
-def start_pomodoro(mins: int) -> None:
+def start_pomodoro(mins: int, name: str | None = None) -> None:
     cfg = _cfg()
     session = common.new_session("pomodoro", int(time.time()), mins * 60,
-                                 cfg["machine_name"])
+                                 cfg["machine_name"], name=name)
     common.write_cache(session)
     hooks.dispatch(hooks.POMODORO_START, session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
 
-def start_break(mins: int) -> None:
+def start_break(mins: int, name: str | None = None) -> None:
     cfg = _cfg()
     session = common.new_session("break", int(time.time()), mins * 60,
-                                 cfg["machine_name"])
+                                 cfg["machine_name"], name=name)
     common.write_cache(session)
     hooks.dispatch(hooks.BREAK_START, session, cfg)
     _push("session", session)
@@ -117,24 +117,24 @@ def _confirm_overwrite() -> bool:
 # commands
 # ---------------------------------------------------------------------------
 
-def cmd_start(mins: int) -> None:
+def cmd_start(mins: int, name: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
     active = _current_active()
     if active and active["state"] in ("pomodoro", "overtime"):
         stop(active)
-    start_pomodoro(mins)
+    start_pomodoro(mins, name=name)
 
 
-def cmd_break(mins: int) -> None:
+def cmd_break(mins: int, name: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
     active = _current_active()
     if active and active["state"] in ("pomodoro", "overtime"):
         stop(active)
-    start_break(mins)
+    start_break(mins, name=name)
 
 
 def cmd_clear() -> None:
@@ -180,7 +180,11 @@ def cmd_status(json_output: bool = False) -> None:
     time_str = _fmt_time(-remaining) if remaining < 0 else _fmt_time(remaining)
     if remaining < 0:
         time_str = f"+{time_str}"
-    display = f"{icon} {time_str}"
+    name = session.get("name")
+    if name:
+        display = f"{icon} {time_str} [{name}]"
+    else:
+        display = f"{icon} {time_str}"
 
     if json_output:
         print(json.dumps({
@@ -190,6 +194,7 @@ def cmd_status(json_output: bool = False) -> None:
             "elapsed": elapsed,
             "remaining": remaining,
             "display": display,
+            "name": name,
         }))
     else:
         print(display)
@@ -204,9 +209,11 @@ def _argparser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("start", help="Start a pomodoro for N minutes")
     p.add_argument("minutes", type=int, help="Duration in minutes")
+    p.add_argument("-n", "--name", help="Optional session name")
 
     p = sub.add_parser("break", help="Start a break for N minutes")
     p.add_argument("minutes", type=int, help="Duration in minutes")
+    p.add_argument("-n", "--name", help="Optional session name")
 
     sub.add_parser("clear", help="Stop current session, optionally start a break")
 
@@ -221,9 +228,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "start":
-        cmd_start(args.minutes)
+        cmd_start(args.minutes, name=args.name)
     elif args.command == "break":
-        cmd_break(args.minutes)
+        cmd_break(args.minutes, name=args.name)
     elif args.command == "clear":
         cmd_clear()
     elif args.command == "status":
