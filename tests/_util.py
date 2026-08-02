@@ -48,10 +48,6 @@ def _patch(test, module, name: str, value) -> None:
     test.addCleanup(setattr, module, name, original)
 
 
-def patch_attr(test, module, name: str, value) -> None:
-    """Public wrapper so individual tests can patch extra seams."""
-    _patch(test, module, name, value)
-
 
 def _rmtree(path: Path) -> None:
     import shutil

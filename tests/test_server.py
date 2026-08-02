@@ -13,7 +13,9 @@ import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
-from _util import isolate, patch_attr
+from unittest.mock import patch
+
+from _util import isolate
 
 import common
 import server
@@ -32,7 +34,9 @@ class LWWTests(unittest.TestCase):
 
     def setUp(self):
         tmp = isolate(self)
-        patch_attr(self, server, "DB_PATH", tmp / "data" / "pomo.db")
+        p = patch.object(server, "DB_PATH", tmp / "data" / "pomo.db")
+        p.start()
+        self.addCleanup(p.stop)
         server.init_db()
 
     def test_apply_missing_field_raises(self):
@@ -190,7 +194,9 @@ class ConcurrencyTests(unittest.TestCase):
 
     def setUp(self):
         tmp = isolate(self)
-        patch_attr(self, server, "DB_PATH", tmp / "data" / "pomo.db")
+        p = patch.object(server, "DB_PATH", tmp / "data" / "pomo.db")
+        p.start()
+        self.addCleanup(p.stop)
         server.init_db()
 
     def test_concurrent_apply_keeps_highest_updated_at(self):

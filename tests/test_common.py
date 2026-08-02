@@ -6,7 +6,7 @@ import json
 import os
 import unittest
 
-from _util import isolate, patch_attr
+from _util import isolate
 
 import common
 

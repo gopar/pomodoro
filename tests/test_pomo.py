@@ -14,7 +14,9 @@ import time
 import unittest
 from datetime import datetime
 
-from _util import isolate, patch_attr
+from unittest.mock import patch
+
+from _util import isolate
 
 import common
 import hooks
@@ -28,19 +30,29 @@ class Base(unittest.TestCase):
         isolate(self)
         self.events: list[str] = []
         self.event_sessions: list[dict] = []
-        patch_attr(self, hooks, "dispatch",
-                   lambda e, s, c, **kw: (
-                       self.events.append(e),
-                       self.event_sessions.append(s),
-                   ))
-        patch_attr(self, common, "post_session", lambda url, s: {})
-        patch_attr(self, common, "post_end", lambda url, s: {})
-        patch_attr(self, common, "enqueue_outbox", lambda a, s: None)
-        patch_attr(self, pomo, "_confirm_overwrite", lambda: True)
+
+        p = patch.object(hooks, "dispatch",
+                         side_effect=lambda e, s, c, **kw: (
+                             self.events.append(e),
+                             self.event_sessions.append(s),
+                         ))
+        p.start(); self.addCleanup(p.stop)
+
+        p = patch.object(common, "post_session", return_value={})
+        p.start(); self.addCleanup(p.stop)
+        p = patch.object(common, "post_end", return_value={})
+        p.start(); self.addCleanup(p.stop)
+        p = patch.object(common, "enqueue_outbox", return_value=None)
+        p.start(); self.addCleanup(p.stop)
+        p = patch.object(pomo, "_confirm_overwrite", return_value=True)
+        p.start(); self.addCleanup(p.stop)
+
         self._stdout = io.StringIO()
         self._stderr = io.StringIO()
-        patch_attr(self, sys, "stdout", self._stdout)
-        patch_attr(self, sys, "stderr", self._stderr)
+        p = patch.object(sys, "stdout", self._stdout)
+        p.start(); self.addCleanup(p.stop)
+        p = patch.object(sys, "stderr", self._stderr)
+        p.start(); self.addCleanup(p.stop)
 
     def _active(self, state: str = "pomodoro") -> dict:
         s = common.new_session(state, int(time.time()), 25 * 60, "laptop")
@@ -54,15 +66,6 @@ class Base(unittest.TestCase):
         else:
             self.assertIsNotNone(session, "expected active session but cache is None")
             self.assertEqual(session["state"], expected_state)
-
-    def _mock_input(self, *responses: str):
-        """Replace builtins.input with a callable that pops from responses."""
-        responses = list(responses)
-
-        def fake_input(prompt=""):
-            return responses.pop(0)
-
-        patch_attr(self, builtins, "input", fake_input)
 
 
 # ---------------------------------------------------------------------------
@@ -86,10 +89,10 @@ class CmdBreakTests(Base):
 class CmdClearTests(Base):
     """pomo clear — stop pomodoro, optionally start a break."""
 
-    def test_clear_with_break_stops_pomodoro_first(self):
+    @patch.object(builtins, "input", side_effect=["5"])
+    def test_clear_with_break_stops_pomodoro_first(self, _mock):
         # Given: an active pomodoro, user enters break minutes "5"
         self._active("pomodoro")
-        self._mock_input("5")
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires first, then break_start
@@ -97,20 +100,20 @@ class CmdClearTests(Base):
         # Then: cache has the break session
         self._assert_cache_state("break")
 
-    def test_clear_invalid_break_input_exits_and_keeps_pomodoro(self):
+    @patch.object(builtins, "input", side_effect=["x"])
+    def test_clear_invalid_break_input_exits_and_keeps_pomodoro(self, _mock):
         # Given: an active pomodoro, user enters non-numeric "x"
         self._active("pomodoro")
-        self._mock_input("x")
         # When / Then: SystemExit raised, pomodoro stays active
         with self.assertRaises(SystemExit):
             pomo.cmd_clear()
         self.assertEqual(self.events, [])
         self._assert_cache_state("pomodoro")
 
-    def test_clear_no_break_stops_pomodoro(self):
+    @patch.object(builtins, "input", side_effect=[""])
+    def test_clear_no_break_stops_pomodoro(self, _mock):
         # Given: an active pomodoro, user enters empty (no break)
         self._active("pomodoro")
-        self._mock_input("")
         # When: pomo clear is run
         pomo.cmd_clear()
         # Then: session_stop fires, cache cleared (this was already correct)
@@ -143,9 +146,6 @@ class CmdStartTests(Base):
 class CmdStatusTests(Base):
     """pomo status [--json] — read current session."""
 
-    def _freeze_time(self, ts: float):
-        patch_attr(self, time, "time", lambda: ts)
-
     def test_status_json_idle_no_cache(self):
         pomo.cmd_status(json_output=True)
         self.assertEqual(json.loads(self._stdout.getvalue()),
@@ -163,12 +163,12 @@ class CmdStatusTests(Base):
         self.assertEqual(json.loads(self._stdout.getvalue()),
                          {"state": "idle", "display": "No active session"})
 
-    def test_status_json_pomodoro_countdown(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_json_pomodoro_countdown(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -179,13 +179,13 @@ class CmdStatusTests(Base):
         self.assertEqual(out["remaining"], duration - 60)
         self.assertEqual(out["display"], "🍅 24:00")
 
-    def test_status_json_pomodoro_overtime(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_json_pomodoro_overtime(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         start = int(now - duration - 10)
         s = common.new_session("pomodoro", start, duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -193,12 +193,12 @@ class CmdStatusTests(Base):
         self.assertEqual(out["remaining"], -10)
         self.assertEqual(out["display"], "⏰ +0:10")
 
-    def test_status_json_break_countdown(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_json_break_countdown(self, _mock):
         now = 1722520000.0
         duration = 5 * 60
         s = common.new_session("break", int(now - 30), duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -206,13 +206,13 @@ class CmdStatusTests(Base):
         self.assertEqual(out["remaining"], duration - 30)
         self.assertEqual(out["display"], "☕ 4:30")
 
-    def test_status_json_break_overtime(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_json_break_overtime(self, _mock):
         now = 1722520000.0
         duration = 5 * 60
         start = int(now - duration - 5)
         s = common.new_session("break", start, duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -220,13 +220,13 @@ class CmdStatusTests(Base):
         self.assertEqual(out["remaining"], -5)
         self.assertEqual(out["display"], "☕ +0:05")
 
-    def test_status_json_already_overtime_in_cache(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_json_already_overtime_in_cache(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         start = int(now - duration - 30)
         s = common.new_session("overtime", start, duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -234,12 +234,12 @@ class CmdStatusTests(Base):
         self.assertEqual(out["remaining"], -30)
         self.assertEqual(out["display"], "⏰ +0:30")
 
-    def test_status_display_key_matches_human_output(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_display_key_matches_human_output(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status(json_output=True)
         json_display = json.loads(self._stdout.getvalue())["display"]
@@ -251,44 +251,44 @@ class CmdStatusTests(Base):
 
         self.assertEqual(json_display, human)
 
-    def test_status_human_pomodoro_countdown(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_human_pomodoro_countdown(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         s = common.new_session("pomodoro", int(now - 60), duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00")
 
-    def test_status_human_overtime(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_human_overtime(self, _mock):
         now = 1722520000.0
         duration = 25 * 60
         start = int(now - duration - 65)
         s = common.new_session("pomodoro", start, duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "⏰ +1:05")
 
-    def test_status_human_break_countdown(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_human_break_countdown(self, _mock):
         now = 1722520000.0
         duration = 5 * 60
         s = common.new_session("break", int(now - 30), duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "☕ 4:30")
 
-    def test_status_human_break_overtime_uses_coffee(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_human_break_overtime_uses_coffee(self, _mock):
         now = 1722520000.0
         duration = 5 * 60
         start = int(now - duration - 10)
         s = common.new_session("break", start, duration, "laptop")
         common.write_cache(s)
-        self._freeze_time(now)
 
         pomo.cmd_status()
         output = self._stdout.getvalue().strip()
@@ -300,27 +300,29 @@ class CmdStatusTests(Base):
         pomo.cmd_status()
         self.assertEqual(self._stdout.getvalue().strip(), "No active session")
 
-    def test_status_named_session_display(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_named_session_display(self, _mock):
         # Given: a named pomodoro session
         now = 1722520000.0
         duration = 25 * 60
         s = common.new_session("pomodoro", int(now - 60), duration,
                                 "laptop", name="project-x")
         common.write_cache(s)
-        self._freeze_time(now)
+
         # When: status is requested
         pomo.cmd_status()
         # Then: name appears after the timer
         self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00 [project-x]")
 
-    def test_status_named_session_json_includes_name(self):
+    @patch.object(time, "time", return_value=1722520000.0)
+    def test_status_named_session_json_includes_name(self, _mock):
         # Given: a named pomodoro session
         now = 1722520000.0
         duration = 25 * 60
         s = common.new_session("pomodoro", int(now - 60), duration,
                                 "laptop", name="project-x")
         common.write_cache(s)
-        self._freeze_time(now)
+
         # When: status --json is requested
         pomo.cmd_status(json_output=True)
         # Then: JSON output includes name
@@ -332,12 +334,13 @@ class CmdStatusTests(Base):
 class CmdHistoryTests(Base):
     """pomo history — today's session timeline."""
 
-    def test_history_human_output(self):
+    @patch.object(common, "get_sessions", return_value=[])
+    def test_history_human_output(self, get_sessions_mock):
         # Given: a named pomodoro session from today
         now = 1722520000.0
         s = common.new_session("pomodoro", int(now), 25 * 60, "laptop", name="fix-auth")
         s["ended_at"] = now + 25 * 60
-        patch_attr(self, common, "get_sessions", lambda url: [s])
+        get_sessions_mock.return_value = [s]
         # When: pomo history is called
         pomo.cmd_history()
         output = self._stdout.getvalue()
@@ -352,10 +355,11 @@ class CmdHistoryTests(Base):
         self.assertIn(expected_start, output)
         self.assertIn(expected_end, output)
 
-    def test_history_json_output(self):
+    @patch.object(common, "get_sessions")
+    def test_history_json_output(self, get_sessions_mock):
         # Given: sessions exist
         s = common.new_session("pomodoro", 1000, 60, "laptop", name="fix-auth")
-        patch_attr(self, common, "get_sessions", lambda url: [s])
+        get_sessions_mock.return_value = [s]
         # When: pomo history --json is called
         pomo.cmd_history(json_output=True)
         out = json.loads(self._stdout.getvalue())
@@ -363,19 +367,18 @@ class CmdHistoryTests(Base):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["name"], "fix-auth")
 
-    def test_history_empty(self):
+    @patch.object(common, "get_sessions", return_value=[])
+    def test_history_empty(self, _mock):
         # Given: no sessions today
-        patch_attr(self, common, "get_sessions", lambda url: [])
         # When: pomo history is called
         pomo.cmd_history()
         # Then: empty message shown
         self.assertIn("No sessions today", self._stdout.getvalue())
 
-    def test_history_offline_errors(self):
+    @patch.object(common, "get_sessions",
+                  side_effect=common.ServerUnavailable("offline"))
+    def test_history_offline_errors(self, _mock):
         # Given: server is unreachable
-        def raise_unavailable(url):
-            raise common.ServerUnavailable("offline")
-        patch_attr(self, common, "get_sessions", raise_unavailable)
         # When / Then: pomo history exits with an error
         with self.assertRaises(SystemExit):
             pomo.cmd_history()

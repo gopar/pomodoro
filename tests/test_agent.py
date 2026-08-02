@@ -10,7 +10,9 @@ import io
 import time
 import unittest
 
-from _util import isolate, patch_attr
+from unittest.mock import patch
+
+from _util import isolate
 
 import agent
 import common
@@ -23,10 +25,14 @@ class TickTimerTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
         self.events: list[str] = []
-        patch_attr(self, hooks, "dispatch",
-                   lambda event, session, cfg, **kw: self.events.append(event))
-        # Server push is a no-op success by default.
-        patch_attr(self, common, "post_session", lambda url, s: {})
+
+        p = patch.object(hooks, "dispatch",
+                         side_effect=lambda event, session, cfg, **kw: self.events.append(event))
+        p.start(); self.addCleanup(p.stop)
+
+        p = patch.object(common, "post_session", return_value={})
+        p.start(); self.addCleanup(p.stop)
+
         self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
 
     def _active(self, state: str, elapsed: int, duration: int = 60) -> dict:
@@ -98,14 +104,14 @@ class TickTimerTests(unittest.TestCase):
         def boom(url, s):
             raise common.ServerUnavailable("offline")
 
-        patch_attr(self, common, "post_session", boom)
-        self._active("pomodoro", elapsed=61, duration=60)
-        # When: the timer ticks and attempts to push
-        agent.tick_timer(self.cfg)
-        # Then: the overtime session is queued in the outbox
-        outbox = common.read_outbox()
-        self.assertEqual(len(outbox), 1)
-        self.assertEqual(outbox[0]["session"]["state"], "overtime")
+        with patch.object(common, "post_session", side_effect=boom):
+            self._active("pomodoro", elapsed=61, duration=60)
+            # When: the timer ticks and attempts to push
+            agent.tick_timer(self.cfg)
+            # Then: the overtime session is queued in the outbox
+            outbox = common.read_outbox()
+            self.assertEqual(len(outbox), 1)
+            self.assertEqual(outbox[0]["session"]["state"], "overtime")
 
 
 class PollServerTests(unittest.TestCase):
@@ -114,20 +120,20 @@ class PollServerTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
         self.adopted: list[dict] = []
-        patch_attr(self, agent, "on_remote_adopt",
-                   lambda session, cfg: self.adopted.append(session))
-        self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
 
-    def _remote(self, session):
-        patch_attr(self, common, "get_current", lambda url: session)
+        p = patch.object(agent, "on_remote_adopt",
+                         side_effect=lambda session, cfg: self.adopted.append(session))
+        p.start(); self.addCleanup(p.stop)
+
+        self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
 
     def test_adopts_newer_remote_session(self):
         # Given: a remote session from desktop newer than local (empty) cache
         remote = common.new_session("pomodoro", 1000, 60, "desktop")
         remote["updated_at"] = 500.0
-        self._remote(remote)
-        # When: the agent polls the server
-        agent.poll_server(self.cfg)
+        with patch.object(common, "get_current", return_value=remote):
+            # When: the agent polls the server
+            agent.poll_server(self.cfg)
         # Then: local cache is updated and on_remote_adopt is called
         self.assertEqual(common.read_cache()["id"], remote["id"])
         self.assertEqual(len(self.adopted), 1)
@@ -139,9 +145,9 @@ class PollServerTests(unittest.TestCase):
         common.write_cache(local)
         remote = common.new_session("pomodoro", 1000, 60, "desktop")
         remote["updated_at"] = 100.0
-        self._remote(remote)
-        # When: the agent polls the server
-        agent.poll_server(self.cfg)
+        with patch.object(common, "get_current", return_value=remote):
+            # When: the agent polls the server
+            agent.poll_server(self.cfg)
         # Then: local session is kept (LWW favours the newer timestamp)
         self.assertEqual(common.read_cache()["id"], local["id"])
 
@@ -150,9 +156,9 @@ class PollServerTests(unittest.TestCase):
         local = common.new_session("ended", 1000, 0, "laptop")
         common.write_cache(local)
         common.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        self._remote(common.idle_session())
-        # When: the agent polls the server
-        agent.poll_server(self.cfg)
+        with patch.object(common, "get_current", return_value=common.idle_session()):
+            # When: the agent polls the server
+            agent.poll_server(self.cfg)
         # Then: local cache is cleared (server idle wins over stale local)
         self.assertTrue(common.is_idle(common.read_cache()))
 
@@ -160,9 +166,9 @@ class PollServerTests(unittest.TestCase):
         # Given: a local active session not yet pushed, server reports idle
         local = common.new_session("pomodoro", 1000, 60, "laptop")
         common.write_cache(local)
-        self._remote(common.idle_session())
-        # When: the agent polls the server
-        agent.poll_server(self.cfg)
+        with patch.object(common, "get_current", return_value=common.idle_session()):
+            # When: the agent polls the server
+            agent.poll_server(self.cfg)
         # Then: unpushed local active session is kept (not clobbered)
         self.assertEqual(common.read_cache()["id"], local["id"])
 
@@ -174,9 +180,9 @@ class PollServerTests(unittest.TestCase):
         # And: A ended the session, so server now reports idle with a newer
         # timestamp (the ended record is more recent than B's local copy)
         remote_idle = {"state": "idle", "updated_at": 200.0, "session_id": local["id"]}
-        self._remote(remote_idle)
-        # When: the agent polls the server
-        agent.poll_server(self.cfg)
+        with patch.object(common, "get_current", return_value=remote_idle):
+            # When: the agent polls the server
+            agent.poll_server(self.cfg)
         # Then: local cache is cleared because the server's end is newer
         self.assertTrue(common.is_idle(common.read_cache()))
 
@@ -191,7 +197,9 @@ class OnRemoteAdoptTests(unittest.TestCase):
         def record(event, session, cfg, *, remote=False):
             self.events.append((event, remote))
 
-        patch_attr(self, hooks, "dispatch", record)
+        p = patch.object(hooks, "dispatch", new=record)
+        p.start(); self.addCleanup(p.stop)
+
         self.cfg = {
             "server_url": "http://x",
             "machine_name": "laptop",
@@ -244,14 +252,21 @@ class LoopResilienceTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
         # Config with a tiny interval; loop re-reads config each iteration.
-        patch_attr(self, common, "load_config",
-                   lambda: {"server_url": "http://x", "machine_name": "laptop",
-                            "poll_interval": 0})
+        p = patch.object(common, "load_config",
+                         return_value={"server_url": "http://x",
+                                       "machine_name": "laptop",
+                                       "poll_interval": 0})
+        p.start(); self.addCleanup(p.stop)
+
         # Neutralize the network-y steps by default.
-        patch_attr(self, agent, "flush_outbox", lambda cfg: None)
-        patch_attr(self, agent, "poll_server", lambda cfg: None)
+        p = patch.object(agent, "flush_outbox", return_value=None)
+        p.start(); self.addCleanup(p.stop)
+        p = patch.object(agent, "poll_server", return_value=None)
+        p.start(); self.addCleanup(p.stop)
+
         # Suppress agent startup log during tests.
-        patch_attr(self, agent.sys, "stderr", io.StringIO())
+        p = patch.object(agent.sys, "stderr", io.StringIO())
+        p.start(); self.addCleanup(p.stop)
 
     def test_loop_survives_iteration_error_and_continues(self):
         # Given: tick_timer raises RuntimeError on first call, succeeds after
@@ -262,35 +277,32 @@ class LoopResilienceTests(unittest.TestCase):
             if self.calls == 1:
                 raise RuntimeError("boom")
 
-        patch_attr(self, agent, "tick_timer", flaky)
         # Break out on the 2nd sleep so we prove the loop kept going past the error.
         def sleeper(_):
             if self.calls >= 2:
                 raise _StopLoop
-        patch_attr(self, agent, "time",
-                   type("T", (), {"sleep": staticmethod(sleeper)}))
-        # When: the loop runs
-        # Then: it survives the RuntimeError and continues iterating
-        with self.assertRaises(_StopLoop):
-            agent.loop()
-        self.assertGreaterEqual(self.calls, 2)
+
+        with patch.object(agent, "tick_timer", new=flaky), \
+             patch.object(agent.time, "sleep", side_effect=sleeper):
+            # When: the loop runs
+            # Then: it survives the RuntimeError and continues iterating
+            with self.assertRaises(_StopLoop):
+                agent.loop()
+            self.assertGreaterEqual(self.calls, 2)
 
     def test_loop_does_not_swallow_keyboard_interrupt(self):
         # Given: tick_timer raises KeyboardInterrupt
         def interrupt(cfg):
             raise KeyboardInterrupt
-        patch_attr(self, agent, "tick_timer", interrupt)
-        patch_attr(self, agent, "time",
-                   type("T", (), {"sleep": staticmethod(lambda _: None)}))
-        # When / Then: KeyboardInterrupt propagates (the loop does not swallow it)
-        with self.assertRaises(KeyboardInterrupt):
-            agent.loop()
+
+        with patch.object(agent, "tick_timer", new=interrupt), \
+             patch.object(agent.time, "sleep", return_value=None):
+            # When / Then: KeyboardInterrupt propagates (the loop does not swallow it)
+            with self.assertRaises(KeyboardInterrupt):
+                agent.loop()
 
     def test_poll_interval_below_minimum_is_clamped(self):
         # Given: config has poll_interval=1 (below minimum of 5)
-        patch_attr(self, common, "load_config",
-                   lambda: {"server_url": "http://x", "machine_name": "laptop",
-                            "poll_interval": 1})
         sleep_args: list[float] = []
 
         def capture_sleep(secs):
@@ -298,14 +310,17 @@ class LoopResilienceTests(unittest.TestCase):
                 raise _StopLoop
             sleep_args.append(secs)
 
-        patch_attr(self, agent, "time",
-                   type("T", (), {"sleep": staticmethod(capture_sleep)}))
-        # When: the loop runs
-        with self.assertRaises(_StopLoop):
-            agent.loop()
-        # Then: sleep is called with 5.0 (clamped), stderr warns about override
-        self.assertEqual(sleep_args[0], 5.0)
-        self.assertIn("clamped", agent.sys.stderr.getvalue())
+        with patch.object(common, "load_config",
+                          return_value={"server_url": "http://x",
+                                        "machine_name": "laptop",
+                                        "poll_interval": 1}), \
+             patch.object(agent.time, "sleep", side_effect=capture_sleep):
+            # When: the loop runs
+            with self.assertRaises(_StopLoop):
+                agent.loop()
+            # Then: sleep is called with 5.0 (clamped), stderr warns about override
+            self.assertEqual(sleep_args[0], 5.0)
+            self.assertIn("clamped", agent.sys.stderr.getvalue())
 
 
 if __name__ == "__main__":
