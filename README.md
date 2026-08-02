@@ -39,9 +39,28 @@ The `pomo` command is `pomo.py`. Put it on your `PATH` (symlink or alias), e.g.
 `ln -s ~/.config/pomo/pomo.py ~/.local/bin/pomo`, then:
 
 ```
-pomo <minutes>        Start a pomodoro
+# Quick start
+pomo start <minutes>  Start a pomodoro
 pomo break <minutes>  Start a break
 pomo clear            Stop & clear the pomodoro (prompts for a break)
+```
+
+```sh
+> pomo --help
+usage: pomo [-h] {start,break,clear,status,history} ...
+
+Start, stop, and track pomodoro sessions.
+
+positional arguments:
+  {start,break,clear,status,history}
+    start               Start a pomodoro for N minutes
+    break               Start a break for N minutes
+    clear               Stop current session, optionally start a break
+    status              Show current session status
+    history             Show today's session history
+
+options:
+  -h, --help            show this help message and exit
 ```
 
 ## Setup
