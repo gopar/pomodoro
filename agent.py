@@ -82,10 +82,9 @@ def poll_server(cfg: dict) -> None:
         return
     local = common.read_cache()
     if common.is_idle(remote):
-        # Server says idle. Clear only if our cache isn't a newer active session
-        # that simply hasn't been pushed yet.
         if local and not common.is_idle(local):
-            # local pending newer session -> keep; outbox will push it
+            if _updated_at(remote) > _updated_at(local):
+                common.clear_cache()
             return
         if local is not None:
             common.clear_cache()

@@ -166,6 +166,20 @@ class PollServerTests(unittest.TestCase):
         # Then: unpushed local active session is kept (not clobbered)
         self.assertEqual(common.read_cache()["id"], local["id"])
 
+    def test_remote_ended_newer_clears_locally_adopted_session(self):
+        # Given: computer B adopted a pomodoro from the server (started by A)
+        local = common.new_session("pomodoro", 1000, 60, "desktop")
+        local["updated_at"] = 100.0
+        common.write_cache(local)
+        # And: A ended the session, so server now reports idle with a newer
+        # timestamp (the ended record is more recent than B's local copy)
+        remote_idle = {"state": "idle", "updated_at": 200.0, "session_id": local["id"]}
+        self._remote(remote_idle)
+        # When: the agent polls the server
+        agent.poll_server(self.cfg)
+        # Then: local cache is cleared because the server's end is newer
+        self.assertTrue(common.is_idle(common.read_cache()))
+
 
 class OnRemoteAdoptTests(unittest.TestCase):
     """Tests for on_remote_adopt: firing the right hooks for remote sessions."""

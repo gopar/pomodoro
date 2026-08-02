@@ -82,6 +82,20 @@ class LWWTests(unittest.TestCase):
         # When / Then: get_current_session reports idle
         self.assertTrue(common.is_idle(server.get_current_session()))
 
+    def test_ended_pointer_idle_response_includes_timestamp_and_session_id(self):
+        # Given: an active session applied, then ended
+        s = _session(200.0, sid="a")
+        server.apply_session(s)
+        server.end_current(_session(300.0, sid="a"))
+        # When: get_current_session reports idle because the session ended
+        current = server.get_current_session()
+        # Then: the idle response carries updated_at and session_id so
+        # agents can compare whether the remote-end is newer than local
+        self.assertTrue(common.is_idle(current))
+        self.assertIn("updated_at", current)
+        self.assertIn("session_id", current)
+        self.assertEqual(current["session_id"], "a")
+
     def test_end_current_sets_ended_at(self):
         # Given: an active session
         server.apply_session(_session(100.0, sid="a"))

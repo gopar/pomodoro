@@ -131,7 +131,8 @@ def _current_session_locked(conn: sqlite3.Connection) -> dict:
         return common.idle_session()
     session = _row_to_session(srow)
     if session["state"] == "ended":
-        return common.idle_session()
+        return {"state": "idle", "updated_at": session["updated_at"],
+                "session_id": session["id"]}
     return session
 
 
