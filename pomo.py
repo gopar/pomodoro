@@ -63,8 +63,8 @@ def _fmt_time(seconds: int) -> str:
     m = (seconds % 3600) // 60
     s = seconds % 60
     if h:
-        return f"{h}:{m:02d}:{s:02d}"
-    return f"{m}:{s:02d}"
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +243,7 @@ def cmd_history(json_output: bool = False,
     print(date_str)
     for s in sessions:
         icon = icon_map.get(s["state"], "")
-        dur = _fmt_time(int(s["duration"]))
+        dur = _fmt_time(max(0, int((s.get("ended_at") or time.time()) - int(s["start_epoch"]))))
         label_parts = []
         p = s.get("project")
         if p:
@@ -253,9 +253,9 @@ def cmd_history(json_output: bool = False,
             label_parts.append(f"[{name}]")
         label_str = " " + " ".join(label_parts) if label_parts else ""
         start_str = datetime.fromtimestamp(int(s["start_epoch"])).strftime("%H:%M")
-        end_epoch = s.get("ended_at") or (int(s["start_epoch"]) + int(s["duration"]))
+        end_epoch = s.get("ended_at") or time.time()
         end_str = datetime.fromtimestamp(int(end_epoch)).strftime("%H:%M")
-        print(f"  {icon}  {dur}{label_str}  {start_str} – {end_str}")
+        print(f"  {start_str} – {end_str}  {icon}  {dur}{label_str}")
 
 
 def cmd_projects(json_output: bool = False) -> None:

@@ -235,7 +235,7 @@ class CmdStatusTests(Base):
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "overtime")
         self.assertEqual(out["remaining"], -10)
-        self.assertEqual(out["display"], "⏰ +0:10")
+        self.assertEqual(out["display"], "⏰ +00:10")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_json_break_countdown(self, _mock):
@@ -248,7 +248,7 @@ class CmdStatusTests(Base):
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "break")
         self.assertEqual(out["remaining"], duration - 30)
-        self.assertEqual(out["display"], "☕ 4:30")
+        self.assertEqual(out["display"], "☕ 04:30")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_json_break_overtime(self, _mock):
@@ -262,7 +262,7 @@ class CmdStatusTests(Base):
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "break-overtime")
         self.assertEqual(out["remaining"], -5)
-        self.assertEqual(out["display"], "☕ +0:05")
+        self.assertEqual(out["display"], "☕ +00:05")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_json_already_overtime_in_cache(self, _mock):
@@ -276,7 +276,7 @@ class CmdStatusTests(Base):
         out = json.loads(self._stdout.getvalue())
         self.assertEqual(out["state"], "overtime")
         self.assertEqual(out["remaining"], -30)
-        self.assertEqual(out["display"], "⏰ +0:30")
+        self.assertEqual(out["display"], "⏰ +00:30")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_display_key_matches_human_output(self, _mock):
@@ -314,7 +314,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
 
         pomo.cmd_status()
-        self.assertEqual(self._stdout.getvalue().strip(), "⏰ +1:05")
+        self.assertEqual(self._stdout.getvalue().strip(), "⏰ +01:05")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_human_break_countdown(self, _mock):
@@ -324,7 +324,7 @@ class CmdStatusTests(Base):
         common.write_cache(s)
 
         pomo.cmd_status()
-        self.assertEqual(self._stdout.getvalue().strip(), "☕ 4:30")
+        self.assertEqual(self._stdout.getvalue().strip(), "☕ 04:30")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_human_break_overtime_uses_coffee(self, _mock):
@@ -338,7 +338,7 @@ class CmdStatusTests(Base):
         output = self._stdout.getvalue().strip()
         self.assertIn("☕", output)
         self.assertIn("+", output)
-        self.assertEqual(output, "☕ +0:10")
+        self.assertEqual(output, "☕ +00:10")
 
     def test_status_human_idle(self):
         pomo.cmd_status()
