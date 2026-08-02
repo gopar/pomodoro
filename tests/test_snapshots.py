@@ -45,6 +45,8 @@ def _assert_snapshot(name: str, args: list[str]) -> None:
         )
 
 
+@unittest.skipIf(sys.version_info < (3, 13),
+                   "argparse help format differs before Python 3.13")
 class PomoHelpSnapshotTests(unittest.TestCase):
     def test_pomo_help(self):
         _assert_snapshot("pomo_help", ["--help"])
