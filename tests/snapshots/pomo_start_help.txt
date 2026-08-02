@@ -1,0 +1,10 @@
+usage: pomo start [-h] [-n NAME] [-p PROJECT] minutes
+
+positional arguments:
+  minutes               Duration in minutes
+
+options:
+  -h, --help            show this help message and exit
+  -n, --name NAME       Optional session name
+  -p, --project PROJECT
+                        Optional project name

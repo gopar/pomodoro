@@ -118,6 +118,21 @@ class HooksTests(unittest.TestCase):
         # Then: POMO_SESSION_PROJECT is set
         self.assertEqual(out.read_text(encoding="utf-8"), "website")
 
+    def test_build_env_has_expected_pomo_keys(self):
+        # Given: a session with a project
+        session = common.new_session("pomodoro", 1, 60, "laptop", project="website")
+        # When: env is built
+        env = hooks._build_env("pomodoro_start", session, remote=False)
+        # Then: exactly the expected POMO_* keys are present
+        expected = {
+            "POMO_EVENT", "POMO_STATE", "POMO_START_EPOCH", "POMO_DURATION",
+            "POMO_ORIGIN_MACHINE", "POMO_SESSION_ID", "POMO_SESSION_PROJECT",
+            "POMO_REMOTE",
+        }
+        pomo_keys = {k for k in env if k.startswith("POMO_")}
+        self.assertEqual(pomo_keys, expected,
+                         "POMO_* env vars changed — update README.md?")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,8 +20,9 @@ CLI are host processes by design.
 ## Architecture (3 processes, shared `common.py`)
 
 - `server.py` — HTTP/JSON source of truth (SQLite, last-write-wins). One instance
-  on a "home-base" machine. Endpoints: `GET /current`, `GET /health`,
-  `POST /sessions`, `POST /sessions/end`.
+  on a "home-base" machine. Endpoints: `GET /health`, `GET /current`,
+  `GET /sessions` (optional `?project=`), `GET /projects`, `POST /sessions`,
+  `POST /sessions/end`.
 - `agent.py` — per-machine daemon. Polls `/current`, owns the countdown→overtime
   timer, fires side effects, flushes the offline outbox.
 - `pomo.py` — the CLI (`pomo <min>`, `pomo break <min>`, `pomo clear`). Writes the
@@ -74,5 +75,16 @@ so run scripts directly, e.g. `python3 agent.py`, not as a `-m` package).
 - Tests isolate all state onto a temp dir via `tests/_util.py` (patches path
   globals in `common`/`server`); they never touch real `~`.`
 - When adding tests use Gherkin style comments (Given, When, Then, etc)
+
+## Keeping README in sync
+
+`README.md` is the user-facing documentation. It must stay in sync with the
+code. When you add, change, or remove any of these, update `README.md`:
+
+- **CLI flags/subcommands** — caught by snapshot tests in
+  `tests/test_snapshots.py` (CI fails on mismatch)
+- **Hook environment variables** — caught by `test_build_env_has_expected_pomo_keys`
+  in `tests/test_hooks.py` (CI fails on mismatch)
+- **Server API endpoints** — no automated check; update manually
 
 See `README.md` for the setup/launchd flow and hook details.

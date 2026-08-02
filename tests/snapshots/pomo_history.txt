@@ -1,0 +1,7 @@
+usage: pomo history [-h] [--json] [-p PROJECT]
+
+options:
+  -h, --help            show this help message and exit
+  --json                Output as JSON
+  -p, --project PROJECT
+                        Filter by project
