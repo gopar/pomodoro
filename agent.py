@@ -146,6 +146,7 @@ def loop() -> None:
     )
     while True:
         cfg = common.load_config()  # re-read so config edits take effect live
+        sys.stderr.write(f"pomo-agent: loaded config at {time.strftime('%m-%d-%Y %H:%M:%S')}\n")
         try:
             flush_outbox(cfg)
             poll_server(cfg)
