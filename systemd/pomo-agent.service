@@ -24,7 +24,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 # Hardcode the full python3 path (more reliable than ``/usr/bin/env``):
-ExecStart=/opt/homebrew/bin/python3 %h/.config/pomo/agent.py
+ExecStart=/opt/homebrew/bin/python3 -m pomo.agent
+WorkingDirectory=%h/.config/pomo
 Restart=on-failure
 RestartSec=5
 # Optional overrides (otherwise agent.toml is used):

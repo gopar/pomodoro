@@ -30,7 +30,7 @@ import os
 import subprocess
 from pathlib import Path
 
-import common
+from pomo import common
 
 POMODORO_START = "pomodoro_start"
 BREAK_START = "break_start"

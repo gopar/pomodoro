@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 from _util import isolate
 
-import agent
-import common
-import hooks
+from pomo import agent
+from pomo import common
+from pomo import hooks
 
 
 class TickTimerTests(unittest.TestCase):

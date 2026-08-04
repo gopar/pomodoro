@@ -18,9 +18,9 @@ from unittest.mock import patch
 
 from _util import isolate
 
-import common
-import hooks
-import pomo
+from pomo import common
+from pomo import hooks
+from pomo import cli as pomo
 
 
 class Base(unittest.TestCase):

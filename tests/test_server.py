@@ -17,8 +17,8 @@ from unittest.mock import patch
 
 from _util import isolate
 
-import common
-import server
+from pomo import common
+from pomo import server
 
 
 def _session(updated_at: float, state: str = "pomodoro", sid: str | None = None) -> dict:

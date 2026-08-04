@@ -25,7 +25,8 @@
         <!-- Hardcode the full python3 path (launchd's default PATH is too
              narrow for ``/usr/bin/env python3`` to find Homebrew python). -->
         <string>/opt/homebrew/bin/python3</string>
-        <string>/Users/gopar/.config/pomo/server.py</string>
+        <string>-m</string>
+        <string>pomo.server</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>

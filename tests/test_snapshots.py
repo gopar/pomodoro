@@ -13,16 +13,15 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-POMO_SCRIPT = REPO_ROOT / "pomo.py"
 SNAPSHOTS_DIR = Path(__file__).resolve().parent / "snapshots"
 
 REMINDER = "remember to update README.md to match"
 
 
 def _assert_snapshot(name: str, args: list[str]) -> None:
-    """Run `pomo.py <args>` and compare stdout to the snapshot file."""
+    """Run `pomo.cli <args>` and compare stdout to the snapshot file."""
     result = subprocess.run(
-        [sys.executable, str(POMO_SCRIPT), *args],
+        [sys.executable, "-m", "pomo.cli", *args],
         capture_output=True, text=True, cwd=REPO_ROOT,
     )
     actual = result.stdout.rstrip()

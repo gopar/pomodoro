@@ -28,9 +28,12 @@ from pathlib import Path
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import common  # noqa: E402
-import hooks  # noqa: E402
+_repo = Path(__file__).resolve().parent.parent
+if str(_repo) not in sys.path:
+    sys.path.insert(0, str(_repo))
+
+from pomo import common
+from pomo import hooks
 
 OVERTIME_OF = {"pomodoro": "overtime", "break": "break-overtime"}
 MIN_POLL_INTERVAL = 5.0

@@ -11,9 +11,9 @@
 # restarts. Set POMO_TOKEN to require bearer auth.
 FROM python:3.12-slim
 
-# Stdlib only — no pip install. Copy just what the server imports.
+# Stdlib only — no pip install. Copy the pomo package.
 WORKDIR /app
-COPY server.py common.py ./
+COPY pomo/ ./pomo/
 
 ENV POMO_DB_PATH=/data/pomo.db \
     POMO_HOST=0.0.0.0 \
@@ -33,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('POMO_PORT','8787'), timeout=3)" \
     || exit 1
 
-CMD ["python3", "server.py"]
+CMD ["python3", "-m", "pomo.server"]

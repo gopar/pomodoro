@@ -9,8 +9,8 @@ import unittest
 
 from _util import isolate
 
-import common
-import hooks
+from pomo import common
+from pomo import hooks
 
 
 def _write_hook(event_dir, name: str, body: str):

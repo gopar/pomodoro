@@ -29,4 +29,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Byte-compile all sources (syntax gate)
-        run: python -m compileall common.py agent.py server.py pomo.py hooks.py tests
+        run: python -m compileall pomo tests

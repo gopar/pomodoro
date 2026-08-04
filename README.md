@@ -20,10 +20,10 @@ one machine and see the countdown and get the overtime warning on another.
 
 ## Usage
 
-Symlink `pomo.py` onto your `PATH`:
+Symlink `pomo/cli.py` onto your `PATH`:
 
 ```sh
-ln -s ~/.config/pomo/pomo.py ~/.local/bin/pomo
+ln -s ~/.config/pomo/pomo/cli.py ~/.local/bin/pomo
 ```
 
 ### Start a session
@@ -240,14 +240,14 @@ Auth: optional bearer token via `POMO_TOKEN`.
 
 ## Architecture
 
-Three small processes share `common.py`:
+Three small processes share `pomo/common.py`:
 
-- **`server.py`** — HTTP/JSON source of truth backed by SQLite with append-only
+- **`pomo/server.py`** — HTTP/JSON source of truth backed by SQLite with append-only
   history. Conflicts resolve last-write-wins by timestamp. Runs on one
   home-base machine.
-- **`agent.py`** — per-machine daemon. Polls the server, owns the local
+- **`pomo/agent.py`** — per-machine daemon. Polls the server, owns the local
   countdown→overtime timer, fires hooks, flushes the offline outbox.
-- **`pomo.py`** — the CLI. Writes the local cache immediately, pushes to the
+- **`pomo/cli.py`** — the CLI. Writes the local cache immediately, pushes to the
   server (or queues to outbox if offline).
 
 Sessions move through states: `pomodoro`/`break` → `overtime`/`break-overtime`

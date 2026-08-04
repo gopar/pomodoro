@@ -8,7 +8,7 @@ import unittest
 
 from _util import isolate
 
-import common
+from pomo import common
 
 
 class SessionModelTests(unittest.TestCase):
