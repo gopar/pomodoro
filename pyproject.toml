@@ -42,7 +42,7 @@ known-first-party = ["pomo"]
 [tool.ruff.lint.per-file-ignores]
 "pomo/*.py" = ["UP036"]  # version guard for 3.11+ is intentional
 "tests/_util.py" = ["E402"]  # import after sys.path insertion
-"tests/*.py" = ["E702", "SIM117"]  # patch + addCleanup semicolons, nested with
+"tests/*.py" = ["SIM117"]  # nested with
 
 [tool.ruff.format]
 quote-style = "double"
