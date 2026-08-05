@@ -335,6 +335,8 @@ def _argparser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
         help="Action (omit to run in foreground)",
     )
 
+    svc_subs.add_parser("list", help="List all managed services")
+
     return parser, svc
 
 
@@ -357,6 +359,10 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "service":
         if args.service_command is None:
             svc_parser.print_help()
+            return
+
+        if args.service_command == "list":
+            service.list_services()
             return
 
         is_server = args.service_command == "server"

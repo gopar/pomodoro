@@ -304,3 +304,35 @@ def logs(server: bool = False) -> None:
         _macos_logs(server)
     else:
         _linux_logs(server)
+
+
+def list_services() -> None:
+    """Print status of all pomo services (agent and server)."""
+    width = 16
+    print(f"  {'NAME':<{width}} STATUS")
+    print(f"  {'─' * width} ────────────")
+
+    def _row(label: str, state: str) -> None:
+        print(f"  {label:<{width}} {state}")
+
+    if _platform() == "macos":
+        for srv in (False, True):
+            label = _macos_label(srv)
+            running = "running" if _macos_check_running(srv) else "stopped"
+            installed = _macos_plist(srv).exists()
+            state = running if installed else "not installed"
+            _row(label, state)
+    else:
+        for srv in (False, True):
+            name = _linux_service_name(srv)
+            installed = _linux_service_path(srv).exists()
+            if installed:
+                result = subprocess.run(
+                    ["systemctl", "--user", "is-active", name],
+                    capture_output=True,
+                    text=True,
+                )
+                state = result.stdout.strip()
+            else:
+                state = "not installed"
+            _row(name, state)
