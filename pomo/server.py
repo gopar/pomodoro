@@ -191,6 +191,11 @@ def apply_session(session: dict) -> tuple[bool, dict]:
                 (session["id"], incoming, incoming),
             )
             applied = cur.rowcount == 1
+            sid = common.sid8(session)
+            if applied:
+                sys.stderr.write(f"pomo-server: {sid} applied ({session['state']})\n")
+            else:
+                sys.stderr.write(f"pomo-server: {sid} rejected (stale)\n")
             current = _current_session_locked(conn)
             conn.execute("COMMIT")
         except Exception:

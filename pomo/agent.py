@@ -74,6 +74,9 @@ def flush_outbox(cfg: dict) -> None:
         except common.ServerUnavailable:
             remaining.append(item)  # keep for next attempt
     common.rewrite_outbox(remaining)
+    if len(items) != len(remaining):
+        flushed = len(items) - len(remaining)
+        sys.stderr.write(f"pomo-agent: flushed {flushed} queued item(s)\n")
 
 
 def poll_server(cfg: dict) -> None:
@@ -96,6 +99,11 @@ def poll_server(cfg: dict) -> None:
             not local or remote.get("id") != (local or {}).get("id")
         ) and remote.get("origin_machine") != cfg["machine_name"]
         common.write_cache(remote)
+        sys.stderr.write(
+            f"pomo-agent: adopted {common.sid8(remote)} "
+            f"({remote['state']}, {remote.get('origin_machine', '?')}, "
+            f"{int(remote['duration']) // 60}m)\n"
+        )
         if remote_started_elsewhere:
             on_remote_adopt(remote, cfg)
 
@@ -121,14 +129,17 @@ def tick_timer(cfg: dict) -> None:
     session["state"] = overtime_state
     session["updated_at"] = time.time()
     common.write_cache(session)
+    sys.stderr.write(f"pomo-agent: overtime {common.sid8(session)}\n")
     overtime_event = (
         hooks.BREAK_OVERTIME if overtime_state == "break-overtime" else hooks.POMODORO_OVERTIME
     )
     hooks.dispatch(overtime_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)
+        sys.stderr.write(f"pomo-agent: pushed {common.sid8(session)}\n")
     except common.ServerUnavailable:
         common.enqueue_outbox("session", session)
+        sys.stderr.write(f"pomo-agent: offline (queued {common.sid8(session)})\n")
 
 
 def _poll_interval(cfg: dict) -> float:
@@ -151,7 +162,6 @@ def loop() -> None:
     )
     while True:
         cfg = common.load_config()  # re-read so config edits take effect live
-        sys.stderr.write(f"pomo-agent: loaded config at {time.strftime('%m-%d-%Y %H:%M:%S')}\n")
         try:
             flush_outbox(cfg)
             poll_server(cfg)

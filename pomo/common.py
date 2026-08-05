@@ -112,6 +112,10 @@ def idle_session() -> dict:
     return {"state": "idle"}
 
 
+def sid8(session: dict) -> str:
+    return session.get("id", "?")[:8]
+
+
 def is_idle(session: dict | None) -> bool:
     return not session or session.get("state") in (None, "idle", "ended")
 

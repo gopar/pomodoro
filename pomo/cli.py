@@ -80,7 +80,7 @@ def start_pomodoro(mins: int, name: str | None = None, project: str | None = Non
     common.write_cache(session)
     hooks.dispatch(hooks.POMODORO_START, session, cfg)
     _push("session", session)
-    print(f"Pomodoro started for {mins} minute(s) 🍅")
+    print(f"Pomodoro {common.sid8(session)} started ({mins}m) 🍅")
 
 
 def start_break(mins: int, name: str | None = None, project: str | None = None) -> None:
@@ -91,7 +91,7 @@ def start_break(mins: int, name: str | None = None, project: str | None = None) 
     common.write_cache(session)
     hooks.dispatch(hooks.BREAK_START, session, cfg)
     _push("session", session)
-    print(f"Break started for {mins} minute(s) ☕")
+    print(f"Break {common.sid8(session)} started ({mins}m) ☕")
 
 
 def stop(session: dict | None) -> None:
@@ -105,6 +105,7 @@ def stop(session: dict | None) -> None:
     common.clear_cache()
     hooks.dispatch(hooks.SESSION_STOP, end, cfg)
     _push("end", end)
+    sys.stderr.write(f"Session {common.sid8(end)} stopped\n")
 
 
 def _confirm_overwrite() -> bool:
