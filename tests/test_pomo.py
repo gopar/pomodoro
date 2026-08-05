@@ -18,7 +18,7 @@ from pomo import cli as pomo
 from pomo import common, hooks
 
 
-class TestBase:
+class Base:
     """Shared test setup: isolated paths, recorded events, no network."""
 
     @pytest.fixture(autouse=True)
@@ -26,33 +26,19 @@ class TestBase:
         self.events: list[str] = []
         self.event_sessions: list[dict] = []
 
-        self._patches: list[patch] = []
-
-        p = patch.object(
+        with patch.object(
             hooks,
             "dispatch",
             side_effect=lambda e, s, c, **kw: (
                 self.events.append(e),
                 self.event_sessions.append(s),
             ),
-        )
-        p.start()
-        self._patches.append(p)
-
-        for mod, name, return_val in [
-            (common, "post_session", {}),
-            (common, "post_end", {}),
-            (common, "enqueue_outbox", None),
-            (pomo, "_confirm_overwrite", True),
-        ]:
-            p = patch.object(mod, name, return_value=return_val)
-            p.start()
-            self._patches.append(p)
-
-        yield
-
-        for p in self._patches:
-            p.stop()
+        ):
+            with patch.object(common, "post_session", return_value={}):
+                with patch.object(common, "post_end", return_value={}):
+                    with patch.object(common, "enqueue_outbox"):
+                        with patch.object(pomo, "_confirm_overwrite", return_value=True):
+                            yield
 
     def _active(self, state: str = "pomodoro") -> dict:
         s = common.new_session(state, int(time.time()), 25 * 60, "laptop")
@@ -73,7 +59,7 @@ class TestBase:
 # ---------------------------------------------------------------------------
 
 
-class TestCmdBreak(TestBase):
+class TestCmdBreak(Base):
     """pomo break N — behaviour with an active pomodoro."""
 
     def test_break_with_active_pomodoro_stops_first(self):
@@ -87,7 +73,7 @@ class TestCmdBreak(TestBase):
         self._assert_cache_state("break")
 
 
-class TestCmdClear(TestBase):
+class TestCmdClear(Base):
     """pomo clear — stop pomodoro, optionally start a break."""
 
     @patch.object(builtins, "input", side_effect=["5"])
@@ -152,7 +138,7 @@ class TestCmdClear(TestBase):
         self._assert_cache_state(None)
 
 
-class TestStopFunction(TestBase):
+class TestStopFunction(Base):
     """stop() — low-level session teardown."""
 
     def test_stop_with_none_is_noop(self):
@@ -175,7 +161,7 @@ class TestStopFunction(TestBase):
         self._assert_cache_state(None)
 
 
-class TestCmdStart(TestBase):
+class TestCmdStart(Base):
     """pomo N — start pomodoro, overwriting existing session."""
 
     def test_start_overwrites_active_pomodoro(self):
@@ -188,7 +174,7 @@ class TestCmdStart(TestBase):
         self._assert_cache_state("pomodoro")
 
 
-class TestCmdStatus(TestBase):
+class TestCmdStatus(Base):
     """pomo status [--json] — read current session."""
 
     def test_status_json_idle_no_cache(self, capsys):
@@ -418,7 +404,7 @@ class TestCmdStatus(TestBase):
         assert out["display"] == "🍅 24:00 [website]"
 
 
-class TestCmdClearInheritance(TestBase):
+class TestCmdClearInheritance(Base):
     """cmd_clear inherits name and project from the cleared session."""
 
     @patch.object(builtins, "input", side_effect=["5"])
@@ -461,7 +447,7 @@ class TestCmdClearInheritance(TestBase):
         assert session["project"] == "website"
 
 
-class TestCmdHistory(TestBase):
+class TestCmdHistory(Base):
     """pomo history — today's session timeline."""
 
     @patch.object(common, "get_sessions", return_value=[])
@@ -537,7 +523,7 @@ class TestCmdHistory(TestBase):
         assert "[website]" in output
 
 
-class TestCmdProjects(TestBase):
+class TestCmdProjects(Base):
     """pomo projects — list all defined projects."""
 
     @patch.object(common, "get_projects", side_effect=common.ServerUnavailable("offline"))

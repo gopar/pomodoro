@@ -6,6 +6,7 @@ tests exercise real transition logic without touching the network or macOS.
 
 from __future__ import annotations
 
+import json
 import time
 from unittest.mock import patch
 
@@ -82,8 +83,6 @@ class TestTickTimer:
 
     def test_malformed_cache_is_noop(self):
         # Given: cache has active state but missing required numeric fields
-        import json
-
         common.ensure_dirs()
         common.CACHE_FILE.write_text(
             json.dumps({"state": "pomodoro", "id": "x", "updated_at": 1.0}),
@@ -247,15 +246,20 @@ class TestLoop:
     @pytest.fixture(autouse=True)
     def _setup(self, isolated):
         # Config with a tiny interval; loop re-reads config each iteration.
-        with patch.object(
-            common,
-            "load_config",
-            return_value={"server_url": "http://x", "machine_name": "laptop", "poll_interval": 0},
+        with (
+            patch.object(
+                common,
+                "load_config",
+                return_value={
+                    "server_url": "http://x",
+                    "machine_name": "laptop",
+                    "poll_interval": 0,
+                },
+            ),
+            patch.object(agent, "flush_outbox", return_value=None),
+            patch.object(agent, "poll_server", return_value=None),
         ):
-            # Neutralize the network-y steps by default.
-            with patch.object(agent, "flush_outbox", return_value=None):
-                with patch.object(agent, "poll_server", return_value=None):
-                    yield
+            yield
 
     def test_loop_survives_iteration_error_and_continues(self):
         # Given: tick_timer raises RuntimeError on first call, succeeds after

@@ -4,6 +4,7 @@ Each test gets an isolated temp directory — all common path globals are
 redirected so tests never touch real ~/.config, ~/.cache, or ~/.local/share.
 """
 
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -34,7 +35,5 @@ def isolated(monkeypatch):
         monkeypatch.setattr(common, name, value)
 
     yield tmp
-
-    import shutil
 
     shutil.rmtree(tmp, ignore_errors=True)
