@@ -154,7 +154,10 @@ def _macos_logs(server: bool) -> None:
     if not log.exists():
         print(f"No log file yet ({log}).")
         return
-    subprocess.run(["tail", "-f", str(log)], check=False)
+    try:
+        subprocess.run(["tail", "-f", str(log)], check=False)
+    except KeyboardInterrupt:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +253,10 @@ def _linux_status(server: bool) -> None:
 
 def _linux_logs(server: bool) -> None:
     name = _linux_service_name(server)
-    subprocess.run(["journalctl", "--user", "-u", name, "-f"], check=False)
+    try:
+        subprocess.run(["journalctl", "--user", "-u", name, "-f"], check=False)
+    except KeyboardInterrupt:
+        pass
 
 
 # ---------------------------------------------------------------------------
