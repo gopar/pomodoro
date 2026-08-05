@@ -93,7 +93,7 @@ class PlistContentTests(unittest.TestCase):
         with patch.object(service, "_binary", return_value="/usr/bin/pomo-agent"):
             content = service._macos_plist_content(server=False)
             # Then: plist contains the expected label
-            self.assertIn("ai.pomo.agent", content)
+            self.assertIn("pomo.agent", content)
 
     def test_plist_content_contains_binary(self):
         # Given: binary is on PATH
@@ -117,7 +117,7 @@ class PlistContentTests(unittest.TestCase):
         with patch.object(service, "_binary", return_value="/usr/bin/pomo-server"):
             content = service._macos_plist_content(server=True)
             # Then: plist uses the server label
-            self.assertIn("ai.pomo.server", content)
+            self.assertIn("pomo.server", content)
 
 
 class LinuxServiceContentTests(unittest.TestCase):
@@ -155,7 +155,7 @@ class PathTests(unittest.TestCase):
         with patch.object(service.Path, "home", return_value=self.tmp):
             path = service._macos_plist(server=False)
             # Then: path is under ~/Library/LaunchAgents
-            expected = self.tmp / "Library" / "LaunchAgents" / "ai.pomo.agent.plist"
+            expected = self.tmp / "Library" / "LaunchAgents" / "pomo.agent.plist"
             self.assertEqual(path, expected)
 
     def test_linux_service_path(self):

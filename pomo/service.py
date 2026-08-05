@@ -35,7 +35,7 @@ def _pomo_env() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 def _macos_label(server: bool) -> str:
-    return "ai.pomo.server" if server else "ai.pomo.agent"
+    return "pomo.server" if server else "pomo.agent"
 
 
 def _macos_plist(server: bool) -> Path:
