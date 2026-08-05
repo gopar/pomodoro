@@ -246,13 +246,15 @@ class LWWTests(unittest.TestCase):
         self.assertEqual(current["kind"], "pomodoro")
 
     def test_kind_preserved_after_ended(self):
-        # Given: a pomodoro session, then ended
-        s = common.new_session("pomodoro", int(time.time()) - 3600, 60, "laptop")
-        s["updated_at"] = time.time() - 1800
+        # Given: a pomodoro session, then ended (use recent timestamps
+        # close to now to avoid UTC date boundary issues).
+        now = time.time()
+        s = common.new_session("pomodoro", int(now) - 60, 60, "laptop")
+        s["updated_at"] = now - 30
         s["kind"] = "pomodoro"
         server.apply_session(s)
         s2 = dict(s)
-        s2["updated_at"] = time.time() - 1
+        s2["updated_at"] = now - 1
         server.end_current(s2)
         # When: reading today's sessions
         sessions = server.get_today_sessions()

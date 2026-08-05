@@ -13,18 +13,22 @@ one machine and see the countdown and get the overtime warning on another.
   sounds) is an executable script you control. Language-agnostic.
 - **Project tagging** — tag sessions to projects: `pomo 25 -p website`.
   Filter history by project, see everything you've worked on.
-- **Zero dependencies** — Python 3.11+ stdlib only. No pip, no npm, no
-  package manager.
+- **Zero dependencies** — Python 3.11+ stdlib only.
+
+---
+
+## Install
+
+```sh
+git clone https://github.com/gopar/pomo.git ~/.config/pomo
+pip install -e ~/.config/pomo   # or:  uv tool install ~/.config/pomo
+```
+
+This puts `pomo`, `pomo-agent`, and `pomo-server` on your `PATH`.
 
 ---
 
 ## Usage
-
-Symlink `pomo/cli.py` onto your `PATH`:
-
-```sh
-ln -s ~/.config/pomo/pomo/cli.py ~/.local/bin/pomo
-```
 
 ### Start a session
 
@@ -94,8 +98,6 @@ options:
 
 ## Setup
 
-The repo lives at `~/.config/pomo` on each machine.
-
 1. **Copy the sample config:**
 
    ```sh
@@ -104,26 +106,20 @@ The repo lives at `~/.config/pomo` on each machine.
 
    Edit `server_url` to point at your home-base machine. A Tailscale hostname
    works well. Set `POMO_TOKEN` on the server and all agents if you want
-   bearer auth (disabled by default).
+   bearer auth (disabled by default). Set `POMO_SERVER_URL` in your shell to
+   pass it to the service at install time.
 
 2. **Home-base machine — start the server:**
 
-   macOS:
-
    ```sh
-   cp launchd/ai.pomo.server.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/ai.pomo.server.plist
+   # Foreground (terminal, for debugging):
+   pomo server
+
+   # Background service:
+   pomo service install --server
    ```
 
-   Linux:
-
-   ```sh
-   cp systemd/pomo-server.service ~/.config/systemd/user/
-   systemctl --user daemon-reload
-   systemctl --user enable --now pomo-server
-   ```
-
-   Docker (use *instead of* systemd — run one, not both):
+   Docker (use *instead of* the service — run one, not both):
 
    ```sh
    docker compose up -d
@@ -131,26 +127,26 @@ The repo lives at `~/.config/pomo` on each machine.
 
 3. **Every machine — start the agent:**
 
-   macOS:
-
    ```sh
-   cp launchd/ai.pomo.agent.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/ai.pomo.agent.plist
+   # Foreground (terminal, for debugging):
+   pomo agent
+
+   # Background service:
+   pomo service install
    ```
 
-   Linux:
+4. **Check service status or tail logs:**
 
    ```sh
-   cp systemd/pomo-agent.service ~/.config/systemd/user/
-   systemctl --user daemon-reload
-   systemctl --user enable --now pomo-agent
-   # For persistence across logout/reboot:
-   loginctl enable-linger "$USER"
+   pomo service status
+   pomo service logs
    ```
 
-That's it. The CLI writes the local cache immediately and pushes to the server;
-if the server is unreachable the push is queued in an offline outbox. The agent
-flushes it on reconnect (last-write-wins by timestamp).
+Offline behavior: the CLI writes the local cache immediately and queues the
+push; the agent syncs on reconnect (last-write-wins by timestamp).
+
+You can also start the agent/server directly as foreground processes for
+debugging.
 
 ---
 
@@ -228,6 +224,7 @@ in `agent.toml.sample`.
 | Method | Path             | Description                               |
 |--------|-----------------|--------------------------------------------|
 | GET    | `/health`       | `{"ok": true}`                             |
+| GET    | `/version`      | `{"version": "0.1.0"}`                     |
 | GET    | `/current`      | Current session or `{"state": "idle"}`     |
 | GET    | `/sessions`     | Today's sessions (optional `?project=`)     |
 | GET    | `/projects`     | All defined project names                   |

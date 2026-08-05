@@ -1,15 +1,19 @@
-usage: pomo [-h] [--version] {start,break,clear,status,history,projects} ...
+usage: pomo [-h] [--version]
+            {start,break,clear,status,history,projects,agent,server,service} ...
 
 Start, stop, and track pomodoro sessions.
 
 positional arguments:
-  {start,break,clear,status,history,projects}
+  {start,break,clear,status,history,projects,agent,server,service}
     start               Start a pomodoro for N minutes
     break               Start a break for N minutes
     clear               Stop current session, optionally start a break
     status              Show current session status
     history             Show today's session history
     projects            List all defined projects
+    agent               Run the local agent (foreground)
+    server              Run the sync server (foreground)
+    service             Manage background services
 
 options:
   -h, --help            show this help message and exit

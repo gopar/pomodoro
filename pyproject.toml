@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pomo"
+version = "0.1.0"
+description = "A multi-machine pomodoro timer that syncs via a home-base server."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+pomo = "pomo.cli:main"
+pomo-agent = "pomo.agent:main"
+pomo-server = "pomo.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pomo"]

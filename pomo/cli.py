@@ -22,14 +22,9 @@ import json
 import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
-
-_repo = Path(__file__).resolve().parent.parent
-if str(_repo) not in sys.path:
-    sys.path.insert(0, str(_repo))
 
 from pomo import common
 from pomo import hooks
@@ -314,6 +309,29 @@ def _argparser() -> argparse.ArgumentParser:
     p = sub.add_parser("projects", help="List all defined projects")
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
+    sub.add_parser("agent", help="Run the local agent (foreground)")
+
+    sub.add_parser("server", help="Run the sync server (foreground)")
+
+    svc = sub.add_parser("service", help="Manage background services")
+    svc_subs = svc.add_subparsers(dest="service_command")
+
+    p = svc_subs.add_parser("install", help="Install and start the service")
+    p.add_argument("--server", action="store_true",
+                   help="Install server service (default: agent)")
+
+    p = svc_subs.add_parser("uninstall", help="Stop and remove the service")
+    p.add_argument("--server", action="store_true",
+                   help="Uninstall server service (default: agent)")
+
+    p = svc_subs.add_parser("status", help="Check service status")
+    p.add_argument("--server", action="store_true",
+                   help="Check server service (default: agent)")
+
+    p = svc_subs.add_parser("logs", help="Tail service logs")
+    p.add_argument("--server", action="store_true",
+                   help="Tail server logs (default: agent)")
+
     return parser
 
 
@@ -333,6 +351,24 @@ def main(argv: list[str] | None = None) -> None:
         cmd_history(json_output=args.json, project=args.project)
     elif args.command == "projects":
         cmd_projects(json_output=args.json)
+    elif args.command == "agent":
+        from pomo import agent
+        agent.loop()
+    elif args.command == "server":
+        from pomo import server
+        server.main()
+    elif args.command == "service":
+        from pomo import service
+        if args.service_command == "install":
+            service.install(server=args.server)
+        elif args.service_command == "uninstall":
+            service.uninstall(server=args.server)
+        elif args.service_command == "status":
+            service.status(server=args.server)
+        elif args.service_command == "logs":
+            service.logs(server=args.server)
+        else:
+            parser.print_help()
     else:
         parser.print_help()
 

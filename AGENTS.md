@@ -20,7 +20,7 @@ CLI are host processes by design.
 ## Architecture (3 processes in the `pomo` package)
 
 - `pomo/server.py` — HTTP/JSON source of truth (SQLite, last-write-wins). One instance
-  on a "home-base" machine. Endpoints: `GET /health`, `GET /current`,
+  on a "home-base" machine. Endpoints: `GET /health`, `GET /version`, `GET /current`,
   `GET /sessions` (optional `?project=`), `GET /projects`, `POST /sessions`,
   `POST /sessions/end`.
 - `pomo/agent.py` — per-machine daemon. Polls `/current`, owns the countdown→overtime
@@ -28,9 +28,8 @@ CLI are host processes by design.
 - `pomo/cli.py` — the CLI (`pomo start <min>`, `pomo break <min>`, `pomo clear`). Writes the
   local cache immediately, then pushes (or queues to outbox if offline).
 
-`pomo/common.py` is imported by all three. Each script adds the repo root to
-`sys.path` on startup so it can be run directly (e.g. `python3 pomo/cli.py`)
-or as a module (e.g. `python3 -m pomo.cli`).
+`pomo/common.py` is imported by all three. Install with `pip install -e .` or
+`uv tool install` to place `pomo`, `pomo-agent`, and `pomo-server` on `PATH`.
 
 ## Critical invariants — easy to break
 

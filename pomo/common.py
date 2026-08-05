@@ -28,15 +28,18 @@ except ModuleNotFoundError:  # pragma: no cover
     tomllib = None
 
 # ---------------------------------------------------------------------------
-# Version (read from VERSION file next to this module)
+# Version
 # ---------------------------------------------------------------------------
-
-_VERSION_FILE = Path(__file__).resolve().parent / "VERSION"
-
 
 def version() -> str:
     try:
-        return _VERSION_FILE.read_text(encoding="utf-8").strip()
+        from importlib.metadata import version as _get_version
+        return _get_version("pomo")
+    except Exception:
+        pass
+    try:
+        vf = Path(__file__).resolve().parent / "VERSION"
+        return vf.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         return "unknown"
 

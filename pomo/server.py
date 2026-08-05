@@ -36,10 +36,6 @@ from urllib.parse import parse_qs, urlparse
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-_repo = Path(__file__).resolve().parent.parent
-if str(_repo) not in sys.path:
-    sys.path.insert(0, str(_repo))
-
 from pomo import common
 
 DB_PATH = Path(os.environ.get("POMO_DB_PATH", str(common.DB_FILE)))
