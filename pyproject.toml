@@ -9,9 +9,6 @@ description = "A multi-machine pomodoro timer that syncs via a home-base server.
 requires-python = ">=3.11"
 dependencies = []
 
-[project.optional-dependencies]
-dev = ["ruff"]
-
 [project.scripts]
 pomo = "pomo.cli:main"
 pomo-agent = "pomo.agent:main"
@@ -46,3 +43,12 @@ known-first-party = ["pomo"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "ty>=0.0.66",
+]
+
+[tool.ty.environment]
+python-version = "3.11"

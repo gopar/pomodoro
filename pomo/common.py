@@ -22,11 +22,12 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from typing import Any
 
 try:
     import tomllib  # Python 3.11+
 except ModuleNotFoundError:  # pragma: no cover
-    tomllib = None
+    tomllib: Any = None
 
 # ---------------------------------------------------------------------------
 # Version
@@ -264,7 +265,9 @@ def _token() -> str | None:
     return tok or None
 
 
-def _request(method: str, url: str, payload: dict | None = None, timeout: float = 4.0) -> dict:
+def _request(
+    method: str, url: str, payload: dict | None = None, timeout: float = 4.0
+) -> dict | list:
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
@@ -287,23 +290,35 @@ def _request(method: str, url: str, payload: dict | None = None, timeout: float 
 
 
 def get_current(server_url: str) -> dict:
-    return _request("GET", server_url.rstrip("/") + "/current")
+    result = _request("GET", server_url.rstrip("/") + "/current")
+    assert isinstance(result, dict)
+    return result
 
 
 def post_session(server_url: str, session: dict) -> dict:
-    return _request("POST", server_url.rstrip("/") + "/sessions", session)
+    result = _request("POST", server_url.rstrip("/") + "/sessions", session)
+    assert isinstance(result, dict)
+    return result
 
 
 def post_end(server_url: str, session: dict) -> dict:
-    return _request("POST", server_url.rstrip("/") + "/sessions/end", session)
+    result = _request("POST", server_url.rstrip("/") + "/sessions/end", session)
+    assert isinstance(result, dict)
+    return result
 
 
 def get_sessions(server_url: str, project: str | None = None) -> list:
     url = server_url.rstrip("/") + "/sessions"
     if project:
         url += "?" + urllib.parse.urlencode({"project": project})
-    return _request("GET", url)
+    result = _request("GET", url)
+    if not isinstance(result, list):
+        return []
+    return result
 
 
 def get_projects(server_url: str) -> list:
-    return _request("GET", server_url.rstrip("/") + "/projects")
+    result = _request("GET", server_url.rstrip("/") + "/projects")
+    if not isinstance(result, list):
+        return []
+    return result

@@ -105,6 +105,7 @@ def tick_timer(cfg: dict) -> None:
     session = common.read_cache()
     if common.is_idle(session):
         return
+    assert session is not None
     state = session.get("state")
     overtime_state = OVERTIME_OF.get(state)
     if overtime_state is None:

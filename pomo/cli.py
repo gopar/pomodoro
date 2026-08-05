@@ -177,6 +177,7 @@ def cmd_status(json_output: bool = False) -> None:
             print("No active session")
         return
 
+    assert session is not None
     now = time.time()
     cache_state = session["state"]
     start = int(session["start_epoch"])

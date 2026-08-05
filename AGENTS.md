@@ -86,7 +86,13 @@ ruff format .         # format
 ruff check . --fix    # auto-fix (safe fixes only)
 ```
 
-CI enforces both. Dev install includes ruff: `pip install -e .[dev]`
+Type checking uses `ty` (fast, stdlib-friendly). Run on source only:
+
+```sh
+ty check pomo
+```
+
+CI enforces all three. Dev install includes ruff and ty: `uv sync --dev`
 
 ## Keeping README in sync
 

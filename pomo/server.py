@@ -257,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "pomo/1.0"
 
     # -- helpers ----------------------------------------------------------
-    def _send_json(self, obj: dict, status: int = 200) -> None:
+    def _send_json(self, obj: dict | list, status: int = 200) -> None:
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -281,8 +281,8 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         return json.loads(raw) if raw else {}
 
-    def log_message(self, fmt, *args):  # quieter logs
-        sys.stderr.write(f"{self.address_string()} - {fmt % args}\n")
+    def log_message(self, format, *args):  # quieter logs
+        sys.stderr.write(f"{self.address_string()} - {format % args}\n")
 
     # -- routes -----------------------------------------------------------
     def do_GET(self):
