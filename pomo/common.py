@@ -38,7 +38,7 @@ def version() -> str:
     try:
         from importlib.metadata import version as _get_version
 
-        return _get_version("pomo")
+        return _get_version("pomoism")
     except Exception:
         pass
     try:

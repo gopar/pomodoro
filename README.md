@@ -20,8 +20,8 @@ one machine and see the countdown and get the overtime warning on another.
 ## Install
 
 ```sh
-git clone https://github.com/gopar/pomo.git ~/.config/pomo
-pip install -e ~/.config/pomo   # or:  uv tool install ~/.config/pomo
+uv tool install https://github.com/gopar/pomoism.git
+# Can also install via pip
 ```
 
 This puts `pomo`, `pomo-agent`, and `pomo-server` on your `PATH`.
