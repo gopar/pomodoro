@@ -26,7 +26,7 @@ from datetime import datetime
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-from pomo import common, hooks
+from pomo import agent, common, hooks, server, service
 
 
 def _cfg() -> dict:
@@ -284,7 +284,7 @@ def cmd_projects(json_output: bool = False) -> None:
         print(p["project"])
 
 
-def _argparser() -> argparse.ArgumentParser:
+def _argparser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     parser = argparse.ArgumentParser(
         prog="pomo",
         description="Start, stop, and track pomodoro sessions.",
@@ -314,32 +314,32 @@ def _argparser() -> argparse.ArgumentParser:
     p = sub.add_parser("projects", help="List all defined projects")
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    sub.add_parser("agent", help="Run the local agent (foreground)")
-
-    sub.add_parser("server", help="Run the sync server (foreground)")
-
-    svc = sub.add_parser("service", help="Manage background services")
+    svc = sub.add_parser("service", help="Manage pomo processes")
     svc_subs = svc.add_subparsers(dest="service_command")
 
-    p = svc_subs.add_parser("install", help="Install and start the service")
-    p.add_argument("--server", action="store_true", help="Install server service (default: agent)")
-
-    p = svc_subs.add_parser("uninstall", help="Stop and remove the service")
-    p.add_argument(
-        "--server", action="store_true", help="Uninstall server service (default: agent)"
+    pa = svc_subs.add_parser("agent", help="Manage the local agent")
+    pa.add_argument(
+        "action",
+        nargs="?",
+        default=None,
+        choices=["install", "uninstall", "status", "logs"],
+        help="Action (omit to run in foreground)",
     )
 
-    p = svc_subs.add_parser("status", help="Check service status")
-    p.add_argument("--server", action="store_true", help="Check server service (default: agent)")
+    ps = svc_subs.add_parser("server", help="Manage the sync server")
+    ps.add_argument(
+        "action",
+        nargs="?",
+        default=None,
+        choices=["install", "uninstall", "status", "logs"],
+        help="Action (omit to run in foreground)",
+    )
 
-    p = svc_subs.add_parser("logs", help="Tail service logs")
-    p.add_argument("--server", action="store_true", help="Tail server logs (default: agent)")
-
-    return parser
+    return parser, svc
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = _argparser()
+    parser, svc_parser = _argparser()
     args = parser.parse_args(argv)
 
     if args.command == "start":
@@ -354,27 +354,24 @@ def main(argv: list[str] | None = None) -> None:
         cmd_history(json_output=args.json, project=args.project)
     elif args.command == "projects":
         cmd_projects(json_output=args.json)
-    elif args.command == "agent":
-        from pomo import agent
-
-        agent.main()
-    elif args.command == "server":
-        from pomo import server
-
-        server.main()
     elif args.command == "service":
-        from pomo import service
+        if args.service_command is None:
+            svc_parser.print_help()
+            return
 
-        if args.service_command == "install":
-            service.install(server=args.server)
-        elif args.service_command == "uninstall":
-            service.uninstall(server=args.server)
-        elif args.service_command == "status":
-            service.status(server=args.server)
-        elif args.service_command == "logs":
-            service.logs(server=args.server)
-        else:
-            parser.print_help()
+        is_server = args.service_command == "server"
+        action = getattr(args, "action", None)
+
+        if action is None:
+            (server.main if is_server else agent.main)()
+        elif action == "install":
+            service.install(server=is_server)
+        elif action == "uninstall":
+            service.uninstall(server=is_server)
+        elif action == "status":
+            service.status(server=is_server)
+        elif action == "logs":
+            service.logs(server=is_server)
     else:
         parser.print_help()
 

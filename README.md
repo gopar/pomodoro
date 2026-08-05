@@ -113,10 +113,10 @@ options:
 
    ```sh
    # Foreground (terminal, for debugging):
-   pomo server
+   pomo service server
 
    # Background service:
-   pomo service install --server
+   pomo service server install
    ```
 
    Docker (use *instead of* the service — run one, not both):
@@ -129,17 +129,17 @@ options:
 
    ```sh
    # Foreground (terminal, for debugging):
-   pomo agent
+   pomo service agent
 
    # Background service:
-   pomo service install
+   pomo service agent install
    ```
 
 4. **Check service status or tail logs:**
 
    ```sh
-   pomo service status
-   pomo service logs
+   pomo service agent status
+   pomo service agent logs
    ```
 
 Offline behavior: the CLI writes the local cache immediately and queues the
