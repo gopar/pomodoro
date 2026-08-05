@@ -1,6 +1,6 @@
 # pomo
 
-[![CI](https://github.com/gopar/pomodoro/actions/workflows/ci.yml/badge.svg)](https://github.com/gopar/pomodoro/actions/workflows/ci.yml)
+[![CI](https://github.com/gopar/pomoism/actions/workflows/ci.yml/badge.svg)](https://github.com/gopar/pomoism/actions/workflows/ci.yml)
 
 A pomodoro timer for people who live in the terminal and work across multiple
 machines. Sessions sync to your home-base server so you can start a session on
