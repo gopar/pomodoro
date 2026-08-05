@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 try:
     import tomllib  # Python 3.11+
@@ -290,35 +290,23 @@ def _request(
 
 
 def get_current(server_url: str) -> dict:
-    result = _request("GET", server_url.rstrip("/") + "/current")
-    assert isinstance(result, dict)
-    return result
+    return cast(dict, _request("GET", server_url.rstrip("/") + "/current"))
 
 
 def post_session(server_url: str, session: dict) -> dict:
-    result = _request("POST", server_url.rstrip("/") + "/sessions", session)
-    assert isinstance(result, dict)
-    return result
+    return cast(dict, _request("POST", server_url.rstrip("/") + "/sessions", session))
 
 
 def post_end(server_url: str, session: dict) -> dict:
-    result = _request("POST", server_url.rstrip("/") + "/sessions/end", session)
-    assert isinstance(result, dict)
-    return result
+    return cast(dict, _request("POST", server_url.rstrip("/") + "/sessions/end", session))
 
 
 def get_sessions(server_url: str, project: str | None = None) -> list:
     url = server_url.rstrip("/") + "/sessions"
     if project:
         url += "?" + urllib.parse.urlencode({"project": project})
-    result = _request("GET", url)
-    if not isinstance(result, list):
-        return []
-    return result
+    return cast(list, _request("GET", url))
 
 
 def get_projects(server_url: str) -> list:
-    result = _request("GET", server_url.rstrip("/") + "/projects")
-    if not isinstance(result, list):
-        return []
-    return result
+    return cast(list, _request("GET", server_url.rstrip("/") + "/projects"))
