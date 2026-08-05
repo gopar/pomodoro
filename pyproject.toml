@@ -38,6 +38,7 @@ known-first-party = ["pomo"]
 
 [tool.ruff.lint.per-file-ignores]
 "pomo/*.py" = ["UP036"]  # version guard for 3.11+ is intentional
+"pomo/server.py" = ["N802"]  # do_GET/do_POST are stdlib overrides
 "tests/_util.py" = ["E402"]  # import after sys.path insertion
 "tests/*.py" = ["SIM117"]  # nested with
 
@@ -46,6 +47,7 @@ quote-style = "double"
 
 [dependency-groups]
 dev = [
+    "pre-commit",
     "ruff",
     "ty>=0.0.66",
 ]

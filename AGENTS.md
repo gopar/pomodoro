@@ -76,6 +76,22 @@ CLI are host processes by design.
   globals in `common`/`server`); they never touch real `~`.`
 - When adding tests use Gherkin style comments (Given, When, Then, etc)
 
+## Pre-commit hooks
+
+Install git hooks to run lint + type checks before every commit:
+
+```sh
+uv sync --dev
+pre-commit install
+```
+
+Hooks run `ruff` (lint + format), `ty` (type check), and file-sanity checks
+(`check-yaml`, `check-toml`, trailing whitespace, EOF newlines). CI also runs
+these — pre-commit catches them before they reach CI.
+
+When bumping the `ruff` version in `[dependency-groups]`, also update the
+`ruff-pre-commit` mirror tag in `.pre-commit-config.yaml` to match.
+
 ## Linting
 
 Ruff handles both linting and formatting. Run before committing:

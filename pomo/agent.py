@@ -112,7 +112,7 @@ def tick_timer(cfg: dict) -> None:
         return  # already in an overtime state; nothing to do
     start_epoch = session.get("start_epoch")
     duration = session.get("duration")
-    if not isinstance(start_epoch, (int, float)) or not isinstance(duration, (int, float)):
+    if not isinstance(start_epoch, int | float) or not isinstance(duration, int | float):
         return  # malformed cache; read_cache normally filters this out
     elapsed = time.time() - start_epoch
     if elapsed < duration:

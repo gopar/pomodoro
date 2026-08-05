@@ -135,9 +135,9 @@ def _valid_session(obj: object) -> bool:
         return True
     if state not in ALL_STATES:
         return False
-    if not isinstance(obj.get("start_epoch"), (int, float)):
+    if not isinstance(obj.get("start_epoch"), int | float):
         return False
-    if not isinstance(obj.get("duration"), (int, float)):
+    if not isinstance(obj.get("duration"), int | float):
         return False
     return "id" in obj and "updated_at" in obj
 
