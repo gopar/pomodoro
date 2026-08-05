@@ -9,11 +9,9 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
 
-from _util import isolate
+import pytest
 
 from pomo import common, server
 
@@ -26,25 +24,23 @@ def _session(updated_at: float, state: str = "pomodoro", sid: str | None = None)
     return s
 
 
-class LWWTests(unittest.TestCase):
+class TestLWW:
     """Tests for apply_session / end_current: LWW semantics and state handling."""
 
-    def setUp(self):
-        tmp = isolate(self)
-        p = patch.object(server, "DB_PATH", tmp / "data" / "pomo.db")
-        p.start()
-        self.addCleanup(p.stop)
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
         server.init_db()
 
     def test_version_is_set(self):
         v = common.version()
-        self.assertTrue(v)
-        self.assertNotEqual(v, "unknown")
+        assert v
+        assert v != "unknown"
 
     def test_apply_missing_field_raises(self):
         # When: apply_session is called with a dict missing required fields
         # Then: ValueError is raised
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             server.apply_session({"id": "x"})
 
     def test_apply_invalid_state_raises(self):
@@ -53,19 +49,19 @@ class LWWTests(unittest.TestCase):
         bad["state"] = "bogus"
         # When: apply_session is called
         # Then: ValueError is raised
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             server.apply_session(bad)
 
     def test_newer_write_wins(self):
         # Given: an older session "a" is applied
         applied, current = server.apply_session(_session(100.0, sid="a"))
-        self.assertTrue(applied)
-        self.assertEqual(current["id"], "a")
+        assert applied
+        assert current["id"] == "a"
         # When: a newer session "b" is applied
         applied, current = server.apply_session(_session(200.0, sid="b"))
         # Then: "b" wins the current pointer
-        self.assertTrue(applied)
-        self.assertEqual(current["id"], "b")
+        assert applied
+        assert current["id"] == "b"
 
     def test_older_write_loses_but_is_recorded_in_history(self):
         # Given: a newer session "winner" is applied
@@ -73,20 +69,20 @@ class LWWTests(unittest.TestCase):
         # When: an older session "loser" is applied
         applied, current = server.apply_session(_session(100.0, sid="loser"))
         # Then: the write loses the pointer (applied=False)
-        self.assertFalse(applied)
-        self.assertEqual(current["id"], "winner")
+        assert not applied
+        assert current["id"] == "winner"
         # Then: loser is still recorded in history even though it lost
         with sqlite3.connect(server.DB_PATH) as conn:
             ids = {r[0] for r in conn.execute("SELECT id FROM sessions")}
-        self.assertIn("loser", ids)
-        self.assertIn("winner", ids)
+        assert "loser" in ids
+        assert "winner" in ids
 
     def test_ended_pointer_reports_idle(self):
         # Given: an active session applied, then ended
         server.apply_session(_session(100.0, sid="a"))
         server.end_current(_session(200.0, sid="a"))
         # When / Then: get_current_session reports idle
-        self.assertTrue(common.is_idle(server.get_current_session()))
+        assert common.is_idle(server.get_current_session())
 
     def test_ended_pointer_idle_response_includes_timestamp_and_session_id(self):
         # Given: an active session applied, then ended
@@ -97,10 +93,10 @@ class LWWTests(unittest.TestCase):
         current = server.get_current_session()
         # Then: the idle response carries updated_at and session_id so
         # agents can compare whether the remote-end is newer than local
-        self.assertTrue(common.is_idle(current))
-        self.assertIn("updated_at", current)
-        self.assertIn("session_id", current)
-        self.assertEqual(current["session_id"], "a")
+        assert common.is_idle(current)
+        assert "updated_at" in current
+        assert "session_id" in current
+        assert current["session_id"] == "a"
 
     def test_end_current_sets_ended_at(self):
         # Given: an active session
@@ -108,14 +104,14 @@ class LWWTests(unittest.TestCase):
         # When: end_current is called
         applied, _ = server.end_current(_session(200.0, sid="a"))
         # Then: session is marked ended with ended_at set
-        self.assertTrue(applied)
+        assert applied
         with sqlite3.connect(server.DB_PATH) as conn:
             row = conn.execute(
                 "SELECT state, ended_at FROM sessions WHERE id = 'a' "
                 "ORDER BY updated_at DESC LIMIT 1"
             ).fetchone()
-        self.assertEqual(row[0], "ended")
-        self.assertIsNotNone(row[1])
+        assert row[0] == "ended"
+        assert row[1] is not None
 
     def test_stale_write_does_not_overwrite_newer_history_row(self):
         # Given: session "a" applied at t=200
@@ -123,7 +119,7 @@ class LWWTests(unittest.TestCase):
         # When: same session "a" re-applied at t=100 (stale)
         applied, _ = server.apply_session(_session(100.0, sid="a"))
         # Then: write loses the pointer
-        self.assertFalse(applied)
+        assert not applied
         # Then: both rows exist in history — the stale write didn't overwrite
         # the newer one (composite PK prevents collision)
         with sqlite3.connect(server.DB_PATH) as conn:
@@ -131,9 +127,9 @@ class LWWTests(unittest.TestCase):
             rows = conn.execute(
                 "SELECT updated_at, state FROM sessions WHERE id = 'a' ORDER BY updated_at DESC"
             ).fetchall()
-        self.assertEqual(len(rows), 2)
-        self.assertEqual(rows[0]["updated_at"], 200.0)  # newer row intact
-        self.assertEqual(rows[1]["updated_at"], 100.0)  # stale row also present
+        assert len(rows) == 2
+        assert rows[0]["updated_at"] == 200.0  # newer row intact
+        assert rows[1]["updated_at"] == 100.0  # stale row also present
 
     def test_name_survives_roundtrip(self):
         # Given: a session is created with a name
@@ -143,7 +139,7 @@ class LWWTests(unittest.TestCase):
         server.apply_session(s)
         current = server.get_current_session()
         # Then: name is preserved
-        self.assertEqual(current["name"], "project-x")
+        assert current["name"] == "project-x"
 
     def test_get_today_sessions_returns_today_only(self):
         # Given: a session from today and one from yesterday
@@ -156,8 +152,8 @@ class LWWTests(unittest.TestCase):
         # When: get_today_sessions is called
         sessions = server.get_today_sessions()
         # Then: only today's session is returned
-        self.assertEqual(len(sessions), 1)
-        self.assertEqual(sessions[0]["id"], s_today["id"])
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == s_today["id"]
 
     def test_get_today_sessions_deduplicates_to_latest(self):
         # Given: the same session id written twice today
@@ -174,15 +170,15 @@ class LWWTests(unittest.TestCase):
         # When: get_today_sessions is called
         sessions = server.get_today_sessions()
         # Then: only the latest row (ended) is returned
-        self.assertEqual(len(sessions), 1)
-        self.assertEqual(sessions[0]["state"], "ended")
+        assert len(sessions) == 1
+        assert sessions[0]["state"] == "ended"
 
     def test_get_today_sessions_returns_empty_when_none(self):
         # Given: no sessions exist
         # When: get_today_sessions is called
         sessions = server.get_today_sessions()
         # Then: empty list
-        self.assertEqual(sessions, [])
+        assert sessions == []
 
     def test_project_survives_roundtrip(self):
         # Given: a session is created with a project
@@ -192,7 +188,7 @@ class LWWTests(unittest.TestCase):
         server.apply_session(s)
         current = server.get_current_session()
         # Then: project is preserved
-        self.assertEqual(current["project"], "website")
+        assert current["project"] == "website"
 
     def test_get_today_sessions_filters_by_project(self):
         # Given: sessions with different projects today
@@ -203,8 +199,8 @@ class LWWTests(unittest.TestCase):
         # When: get_today_sessions is called with project filter
         filtered = server.get_today_sessions(project="website")
         # Then: only matching sessions are returned
-        self.assertEqual(len(filtered), 1)
-        self.assertEqual(filtered[0]["project"], "website")
+        assert len(filtered) == 1
+        assert filtered[0]["project"] == "website"
 
     def test_get_projects_returns_distinct(self):
         # Given: sessions with various projects
@@ -217,14 +213,14 @@ class LWWTests(unittest.TestCase):
         # When: get_projects is called
         projects = server.get_projects()
         # Then: distinct projects sorted alphabetically
-        self.assertEqual(projects, [{"project": "backend"}, {"project": "website"}])
+        assert projects == [{"project": "backend"}, {"project": "website"}]
 
     def test_get_projects_empty_when_none(self):
         # Given: no sessions with projects exist
         # When: get_projects is called
         projects = server.get_projects()
         # Then: empty list
-        self.assertEqual(projects, [])
+        assert projects == []
 
     def test_kind_survives_roundtrip(self):
         # Given: a pomodoro session with kind="pomodoro"
@@ -234,7 +230,7 @@ class LWWTests(unittest.TestCase):
         server.apply_session(s)
         current = server.get_current_session()
         # Then: kind is preserved
-        self.assertEqual(current["kind"], "pomodoro")
+        assert current["kind"] == "pomodoro"
 
     def test_kind_preserved_after_ended(self):
         # Given: a pomodoro session, then ended (use recent timestamps
@@ -250,12 +246,12 @@ class LWWTests(unittest.TestCase):
         # When: reading today's sessions
         sessions = server.get_today_sessions()
         # Then: the ended record still has kind="pomodoro"
-        self.assertEqual(len(sessions), 1)
-        self.assertEqual(sessions[0]["kind"], "pomodoro")
-        self.assertEqual(sessions[0]["state"], "ended")
+        assert len(sessions) == 1
+        assert sessions[0]["kind"] == "pomodoro"
+        assert sessions[0]["state"] == "ended"
 
 
-class ConcurrencyTests(unittest.TestCase):
+class TestConcurrency:
     """LWW must hold under concurrent writers.
 
     apply_session runs the history insert and a WHERE-guarded pointer UPDATE
@@ -263,11 +259,9 @@ class ConcurrencyTests(unittest.TestCase):
     writers cannot lose the highest-updated_at winner.
     """
 
-    def setUp(self):
-        tmp = isolate(self)
-        p = patch.object(server, "DB_PATH", tmp / "data" / "pomo.db")
-        p.start()
-        self.addCleanup(p.stop)
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
         server.init_db()
 
     def test_concurrent_apply_keeps_highest_updated_at(self):
@@ -290,18 +284,16 @@ class ConcurrencyTests(unittest.TestCase):
             list(pool.map(worker, sessions))
 
         # Then: no errors, highest-updated_at wins, all n sessions in history
-        self.assertEqual(errors, [], f"apply_session raised under load: {errors}")
+        assert errors == [], f"apply_session raised under load: {errors}"
 
         current = server.get_current_session()
-        self.assertEqual(
-            current["id"],
-            f"s{n - 1:02d}",
-            "current pointer is not the highest-updated_at session",
+        assert current["id"] == f"s{n - 1:02d}", (
+            "current pointer is not the highest-updated_at session"
         )
 
         with sqlite3.connect(server.DB_PATH) as conn:
             count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        self.assertEqual(count, n, "not all sessions were recorded in history")
+        assert count == n, "not all sessions were recorded in history"
 
     def test_concurrent_mixed_order_selects_global_max(self):
         # Given: updated_at values in shuffled order across threads
@@ -327,13 +319,9 @@ class ConcurrencyTests(unittest.TestCase):
             list(pool.map(worker, pairs))
 
         # Then: no errors, global max wins, all sessions in history
-        self.assertEqual(errors, [], f"apply_session raised under load: {errors}")
-        self.assertEqual(server.get_current_session()["id"], max_id)
+        assert errors == [], f"apply_session raised under load: {errors}"
+        assert server.get_current_session()["id"] == max_id
 
         with sqlite3.connect(server.DB_PATH) as conn:
             count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        self.assertEqual(count, len(pairs))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert count == len(pairs)

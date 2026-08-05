@@ -257,10 +257,10 @@ Because the timer and hooks are local, everything works with no network.
 
 ## Development
 
-Tests are stdlib `unittest`, zero dependencies:
+Tests are `pytest` (stdlib `unittest.mock` for patches):
 
 ```sh
-python3 -m unittest discover -s tests -t tests
+pytest
 ```
 
 Dev install includes ruff and ty:

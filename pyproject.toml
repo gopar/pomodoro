@@ -48,9 +48,13 @@ quote-style = "double"
 [dependency-groups]
 dev = [
     "pre-commit",
+    "pytest",
     "ruff",
     "ty>=0.0.66",
 ]
 
 [tool.ty.environment]
 python-version = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

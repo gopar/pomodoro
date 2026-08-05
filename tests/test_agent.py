@@ -6,36 +6,28 @@ tests exercise real transition logic without touching the network or macOS.
 
 from __future__ import annotations
 
-import io
 import time
-import unittest
 from unittest.mock import patch
 
-from _util import isolate
+import pytest
 
 from pomo import agent, common, hooks
 
 
-class TickTimerTests(unittest.TestCase):
+class TestTickTimer:
     """Tests for tick_timer: countdown expiry, overtime transitions, and push."""
 
-    def setUp(self):
-        isolate(self)
+    @pytest.fixture(autouse=True)
+    def _setup(self, isolated):
         self.events: list[str] = []
-
-        p = patch.object(
+        self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
+        with patch.object(
             hooks,
             "dispatch",
             side_effect=lambda event, session, cfg, **kw: self.events.append(event),
-        )
-        p.start()
-        self.addCleanup(p.stop)
-
-        p = patch.object(common, "post_session", return_value={})
-        p.start()
-        self.addCleanup(p.stop)
-
-        self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
+        ):
+            with patch.object(common, "post_session", return_value={}):
+                yield
 
     def _active(self, state: str, elapsed: int, duration: int = 60) -> dict:
         start = int(time.time()) - elapsed
@@ -49,8 +41,8 @@ class TickTimerTests(unittest.TestCase):
         # When: the timer ticks
         agent.tick_timer(self.cfg)
         # Then: state stays pomodoro, no events are fired
-        self.assertEqual(common.read_cache()["state"], "pomodoro")
-        self.assertEqual(self.events, [])
+        assert common.read_cache()["state"] == "pomodoro"
+        assert self.events == []
 
     def test_pomodoro_transitions_to_overtime(self):
         # Given: a pomodoro past its duration (61s elapsed, 60s total)
@@ -59,9 +51,9 @@ class TickTimerTests(unittest.TestCase):
         agent.tick_timer(self.cfg)
         # Then: state becomes overtime, updated_at advances, overtime event fires
         after = common.read_cache()
-        self.assertEqual(after["state"], "overtime")
-        self.assertGreaterEqual(after["updated_at"], before["updated_at"])
-        self.assertEqual(self.events, [hooks.POMODORO_OVERTIME])
+        assert after["state"] == "overtime"
+        assert after["updated_at"] >= before["updated_at"]
+        assert self.events == [hooks.POMODORO_OVERTIME]
 
     def test_break_transitions_to_break_overtime(self):
         # Given: a break past its duration
@@ -69,8 +61,8 @@ class TickTimerTests(unittest.TestCase):
         # When: the timer ticks
         agent.tick_timer(self.cfg)
         # Then: state becomes break-overtime, break_overtime event fires
-        self.assertEqual(common.read_cache()["state"], "break-overtime")
-        self.assertEqual(self.events, [hooks.BREAK_OVERTIME])
+        assert common.read_cache()["state"] == "break-overtime"
+        assert self.events == [hooks.BREAK_OVERTIME]
 
     def test_already_overtime_is_noop(self):
         # Given: already in overtime state
@@ -78,15 +70,15 @@ class TickTimerTests(unittest.TestCase):
         # When: the timer ticks
         agent.tick_timer(self.cfg)
         # Then: no state change, no events fired
-        self.assertEqual(common.read_cache()["state"], "overtime")
-        self.assertEqual(self.events, [])
+        assert common.read_cache()["state"] == "overtime"
+        assert self.events == []
 
     def test_idle_is_noop(self):
         # Given: no active session (idle)
         # When: the timer ticks
         agent.tick_timer(self.cfg)
         # Then: no events fired
-        self.assertEqual(self.events, [])
+        assert self.events == []
 
     def test_malformed_cache_is_noop(self):
         # Given: cache has active state but missing required numeric fields
@@ -100,7 +92,7 @@ class TickTimerTests(unittest.TestCase):
         # When: the timer ticks
         agent.tick_timer(self.cfg)
         # Then: no events fired (self-heals, no crash)
-        self.assertEqual(self.events, [])
+        assert self.events == []
 
     def test_offline_push_queues_outbox(self):
         # Given: an expired pomodoro, and the server is unreachable
@@ -113,24 +105,23 @@ class TickTimerTests(unittest.TestCase):
             agent.tick_timer(self.cfg)
             # Then: the overtime session is queued in the outbox
             outbox = common.read_outbox()
-            self.assertEqual(len(outbox), 1)
-            self.assertEqual(outbox[0]["session"]["state"], "overtime")
+            assert len(outbox) == 1
+            assert outbox[0]["session"]["state"] == "overtime"
 
 
-class PollServerTests(unittest.TestCase):
+class TestPollServer:
     """Tests for poll_server: adopting remote sessions vs preserving local state."""
 
-    def setUp(self):
-        isolate(self)
+    @pytest.fixture(autouse=True)
+    def _setup(self, isolated):
         self.adopted: list[dict] = []
-
-        p = patch.object(
-            agent, "on_remote_adopt", side_effect=lambda session, cfg: self.adopted.append(session)
-        )
-        p.start()
-        self.addCleanup(p.stop)
-
         self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
+        with patch.object(
+            agent,
+            "on_remote_adopt",
+            side_effect=lambda session, cfg: self.adopted.append(session),
+        ):
+            yield
 
     def test_adopts_newer_remote_session(self):
         # Given: a remote session from desktop newer than local (empty) cache
@@ -140,8 +131,8 @@ class PollServerTests(unittest.TestCase):
             # When: the agent polls the server
             agent.poll_server(self.cfg)
         # Then: local cache is updated and on_remote_adopt is called
-        self.assertEqual(common.read_cache()["id"], remote["id"])
-        self.assertEqual(len(self.adopted), 1)
+        assert common.read_cache()["id"] == remote["id"]
+        assert len(self.adopted) == 1
 
     def test_keeps_local_when_remote_older(self):
         # Given: a local session newer than the remote one
@@ -154,7 +145,7 @@ class PollServerTests(unittest.TestCase):
             # When: the agent polls the server
             agent.poll_server(self.cfg)
         # Then: local session is kept (LWW favours the newer timestamp)
-        self.assertEqual(common.read_cache()["id"], local["id"])
+        assert common.read_cache()["id"] == local["id"]
 
     def test_server_idle_clears_stale_local(self):
         # Given: a stale local cache (ended session) and server reports idle
@@ -165,7 +156,7 @@ class PollServerTests(unittest.TestCase):
             # When: the agent polls the server
             agent.poll_server(self.cfg)
         # Then: local cache is cleared (server idle wins over stale local)
-        self.assertTrue(common.is_idle(common.read_cache()))
+        assert common.is_idle(common.read_cache())
 
     def test_local_pending_active_kept_when_server_idle(self):
         # Given: a local active session not yet pushed, server reports idle
@@ -175,7 +166,7 @@ class PollServerTests(unittest.TestCase):
             # When: the agent polls the server
             agent.poll_server(self.cfg)
         # Then: unpushed local active session is kept (not clobbered)
-        self.assertEqual(common.read_cache()["id"], local["id"])
+        assert common.read_cache()["id"] == local["id"]
 
     def test_remote_ended_newer_clears_locally_adopted_session(self):
         # Given: computer B adopted a pomodoro from the server (started by A)
@@ -189,28 +180,26 @@ class PollServerTests(unittest.TestCase):
             # When: the agent polls the server
             agent.poll_server(self.cfg)
         # Then: local cache is cleared because the server's end is newer
-        self.assertTrue(common.is_idle(common.read_cache()))
+        assert common.is_idle(common.read_cache())
 
 
-class OnRemoteAdoptTests(unittest.TestCase):
+class TestOnRemoteAdopt:
     """Tests for on_remote_adopt: firing the right hooks for remote sessions."""
 
-    def setUp(self):
-        isolate(self)
+    @pytest.fixture(autouse=True)
+    def _setup(self, isolated):
         self.events: list[tuple[str, bool]] = []
-
-        def record(event, session, cfg, *, remote=False):
-            self.events.append((event, remote))
-
-        p = patch.object(hooks, "dispatch", new=record)
-        p.start()
-        self.addCleanup(p.stop)
-
         self.cfg = {
             "server_url": "http://x",
             "machine_name": "laptop",
             "run_for_remote_sessions": True,
         }
+
+        def record(event, session, cfg, *, remote=False):
+            self.events.append((event, remote))
+
+        with patch.object(hooks, "dispatch", new=record):
+            yield
 
     def _session(self, state: str) -> dict:
         return common.new_session(state, 1000, 60, "desktop")
@@ -221,63 +210,52 @@ class OnRemoteAdoptTests(unittest.TestCase):
         # When: adopting a remote pomodoro session
         agent.on_remote_adopt(self._session("pomodoro"), self.cfg)
         # Then: no hooks are dispatched
-        self.assertEqual(self.events, [])
+        assert self.events == []
 
     def test_adopts_remote_pomodoro_start(self):
         # When: adopting a remote pomodoro session
         agent.on_remote_adopt(self._session("pomodoro"), self.cfg)
         # Then: pomodoro_start dispatched with remote=True
-        self.assertEqual(self.events, [(hooks.POMODORO_START, True)])
+        assert self.events == [(hooks.POMODORO_START, True)]
 
     def test_adopts_remote_break_start(self):
         # When: adopting a remote break session
         agent.on_remote_adopt(self._session("break"), self.cfg)
         # Then: break_start dispatched with remote=True
-        self.assertEqual(self.events, [(hooks.BREAK_START, True)])
+        assert self.events == [(hooks.BREAK_START, True)]
 
     def test_adopts_remote_overtime(self):
         # When: adopting a remote overtime session
         agent.on_remote_adopt(self._session("overtime"), self.cfg)
         # Then: pomodoro_overtime dispatched with remote=True
-        self.assertEqual(self.events, [(hooks.POMODORO_OVERTIME, True)])
+        assert self.events == [(hooks.POMODORO_OVERTIME, True)]
 
     def test_adopts_remote_break_overtime(self):
         # When: adopting a remote break-overtime session
         agent.on_remote_adopt(self._session("break-overtime"), self.cfg)
         # Then: break_overtime dispatched with remote=True
-        self.assertEqual(self.events, [(hooks.BREAK_OVERTIME, True)])
+        assert self.events == [(hooks.BREAK_OVERTIME, True)]
 
 
 class _StopLoop(Exception):
     """Sentinel used to break agent.loop() deterministically in tests."""
 
 
-class LoopResilienceTests(unittest.TestCase):
+class TestLoop:
     """Tests for the agent main loop: error resilience and shutdown."""
 
-    def setUp(self):
-        isolate(self)
+    @pytest.fixture(autouse=True)
+    def _setup(self, isolated):
         # Config with a tiny interval; loop re-reads config each iteration.
-        p = patch.object(
+        with patch.object(
             common,
             "load_config",
             return_value={"server_url": "http://x", "machine_name": "laptop", "poll_interval": 0},
-        )
-        p.start()
-        self.addCleanup(p.stop)
-
-        # Neutralize the network-y steps by default.
-        p = patch.object(agent, "flush_outbox", return_value=None)
-        p.start()
-        self.addCleanup(p.stop)
-        p = patch.object(agent, "poll_server", return_value=None)
-        p.start()
-        self.addCleanup(p.stop)
-
-        # Suppress agent startup log during tests.
-        p = patch.object(agent.sys, "stderr", io.StringIO())
-        p.start()
-        self.addCleanup(p.stop)
+        ):
+            # Neutralize the network-y steps by default.
+            with patch.object(agent, "flush_outbox", return_value=None):
+                with patch.object(agent, "poll_server", return_value=None):
+                    yield
 
     def test_loop_survives_iteration_error_and_continues(self):
         # Given: tick_timer raises RuntimeError on first call, succeeds after
@@ -299,9 +277,9 @@ class LoopResilienceTests(unittest.TestCase):
         ):
             # When: the loop runs
             # Then: it survives the RuntimeError and continues iterating
-            with self.assertRaises(_StopLoop):
+            with pytest.raises(_StopLoop):
                 agent.loop()
-            self.assertGreaterEqual(self.calls, 2)
+            assert self.calls >= 2
 
     def test_loop_does_not_swallow_keyboard_interrupt(self):
         # Given: tick_timer raises KeyboardInterrupt
@@ -313,10 +291,10 @@ class LoopResilienceTests(unittest.TestCase):
             patch.object(agent.time, "sleep", return_value=None),
         ):
             # When / Then: KeyboardInterrupt propagates (the loop does not swallow it)
-            with self.assertRaises(KeyboardInterrupt):
+            with pytest.raises(KeyboardInterrupt):
                 agent.loop()
 
-    def test_poll_interval_below_minimum_is_clamped(self):
+    def test_poll_interval_below_minimum_is_clamped(self, capsys):
         # Given: config has poll_interval=1 (below minimum of 5)
         sleep_args: list[float] = []
 
@@ -338,12 +316,8 @@ class LoopResilienceTests(unittest.TestCase):
             patch.object(agent.time, "sleep", side_effect=capture_sleep),
         ):
             # When: the loop runs
-            with self.assertRaises(_StopLoop):
+            with pytest.raises(_StopLoop):
                 agent.loop()
             # Then: sleep is called with 5.0 (clamped), stderr warns about override
-            self.assertEqual(sleep_args[0], 5.0)
-            self.assertIn("clamped", agent.sys.stderr.getvalue())
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert sleep_args[0] == 5.0
+            assert "clamped" in capsys.readouterr().err

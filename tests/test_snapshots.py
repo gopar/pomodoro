@@ -9,8 +9,9 @@ from __future__ import annotations
 import difflib
 import subprocess
 import sys
-import unittest
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SNAPSHOTS_DIR = Path(__file__).resolve().parent / "snapshots"
@@ -48,8 +49,10 @@ def _assert_snapshot(name: str, args: list[str]) -> None:
         raise AssertionError(f"help output changed for {name} ({REMINDER}):\n{diff}")
 
 
-@unittest.skipIf(sys.version_info < (3, 13), "argparse help format differs before Python 3.13")
-class PomoHelpSnapshotTests(unittest.TestCase):
+@pytest.mark.skipif(
+    sys.version_info < (3, 13), reason="argparse help format differs before Python 3.13"
+)
+class TestPomoHelpSnapshot:
     def test_pomo_help(self):
         _assert_snapshot("pomo_help", ["--help"])
 
@@ -64,7 +67,3 @@ class PomoHelpSnapshotTests(unittest.TestCase):
 
     def test_pomo_projects_help(self):
         _assert_snapshot("pomo_projects", ["projects", "--help"])
-
-
-if __name__ == "__main__":
-    unittest.main()

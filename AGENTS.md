@@ -4,9 +4,9 @@ Multi-machine pomodoro sync service. Python **stdlib only** — no third-party
 deps, no package manager, no build/lint/test config. Requires Python 3.11+
 (`tomllib`); developed/run on macOS.
 
-Tests live in `tests/` (stdlib `unittest`, no deps). Run them with:
+Tests live in `tests/` (pytest + `unittest.mock`). Run them with:
 
-    python3 -m unittest discover -s tests -t tests
+    pytest
 
 Add tests under `tests/` to verify changes; for anything that can't be covered
 by a test, run the processes directly (see below).

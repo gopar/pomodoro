@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import json
 import stat
-import unittest
 
-from _util import isolate
+import pytest
 
 from pomo import common, hooks
 
@@ -20,11 +19,12 @@ def _write_hook(event_dir, name: str, body: str):
     return script
 
 
-class HooksTests(unittest.TestCase):
+class TestHooks:
     """Tests for hook dispatch: script execution, env, ordering, and robustness."""
 
-    def setUp(self):
-        self.tmp = isolate(self)
+    @pytest.fixture(autouse=True)
+    def _setup(self, isolated):
+        self.tmp = isolated
         self.cfg = {
             "machine_name": "laptop",
             "hooks": {"enabled": True, "timeout": 10, "dir": ""},
@@ -45,7 +45,7 @@ class HooksTests(unittest.TestCase):
         session = common.new_session("pomodoro", 1, 60, "laptop")
         hooks.dispatch(hooks.POMODORO_START, session, self.cfg)
         # Then: the hook script runs and produces its output
-        self.assertTrue(out.exists())
+        assert out.exists()
 
     def test_hook_receives_env_and_stdin(self):
         # Given: a hook script that captures env vars and stdin
@@ -61,9 +61,9 @@ class HooksTests(unittest.TestCase):
         hooks.dispatch(hooks.POMODORO_START, session, self.cfg)
         # Then: POMO_EVENT matches, POMO_STATE matches, stdin is the session JSON
         event, state, stdin = out.read_text(encoding="utf-8").split("|", 2)
-        self.assertEqual(event, hooks.POMODORO_START)
-        self.assertEqual(state, "pomodoro")
-        self.assertEqual(json.loads(stdin)["id"], session["id"])
+        assert event == hooks.POMODORO_START
+        assert state == "pomodoro"
+        assert json.loads(stdin)["id"] == session["id"]
 
     def test_disabled_hooks_do_not_run(self):
         # Given: a hook script, but hooks are disabled in config
@@ -75,7 +75,7 @@ class HooksTests(unittest.TestCase):
         # When: dispatch is called
         hooks.dispatch(hooks.POMODORO_START, None, self.cfg)
         # Then: the script never runs
-        self.assertFalse(out.exists())
+        assert not out.exists()
 
     def test_missing_event_dir_is_noop(self):
         # Given: no event directory for break_overtime
@@ -94,7 +94,7 @@ class HooksTests(unittest.TestCase):
         # When: dispatch is called
         hooks.dispatch(hooks.POMODORO_START, None, self.cfg)
         # Then: the script is skipped (no output)
-        self.assertFalse(out.exists())
+        assert not out.exists()
 
     def test_scripts_run_in_lexical_order(self):
         # Given: two hook scripts in the same event dir (20-b, 10-a)
@@ -105,7 +105,7 @@ class HooksTests(unittest.TestCase):
         # When: dispatch is called
         hooks.dispatch(hooks.POMODORO_START, None, self.cfg)
         # Then: scripts run in lexical filename order (10-a before 20-b)
-        self.assertEqual(out.read_text(encoding="utf-8"), "ab")
+        assert out.read_text(encoding="utf-8") == "ab"
 
     def test_hook_receives_project_env_var(self):
         # Given: a hook script that captures POMO_SESSION_PROJECT
@@ -119,7 +119,7 @@ class HooksTests(unittest.TestCase):
         session = common.new_session("pomodoro", 1, 60, "laptop", project="website")
         hooks.dispatch(hooks.POMODORO_START, session, self.cfg)
         # Then: POMO_SESSION_PROJECT is set
-        self.assertEqual(out.read_text(encoding="utf-8"), "website")
+        assert out.read_text(encoding="utf-8") == "website"
 
     def test_build_env_has_expected_pomo_keys(self):
         # Given: a session with a project
@@ -138,8 +138,4 @@ class HooksTests(unittest.TestCase):
             "POMO_REMOTE",
         }
         pomo_keys = {k for k in env if k.startswith("POMO_")}
-        self.assertEqual(pomo_keys, expected, "POMO_* env vars changed — update README.md?")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert pomo_keys == expected, "POMO_* env vars changed — update README.md?"
