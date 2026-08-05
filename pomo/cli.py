@@ -353,7 +353,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_projects(json_output=args.json)
     elif args.command == "agent":
         from pomo import agent
-        agent.loop()
+        agent.main()
     elif args.command == "server":
         from pomo import server
         server.main()

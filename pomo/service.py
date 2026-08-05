@@ -18,8 +18,14 @@ def _binary(server: bool) -> str:
     name = "pomo-server" if server else "pomo-agent"
     path = shutil.which(name)
     if not path:
+        # Also check the current venv (common for dev installs).
+        venv_bin = Path(sys.prefix) / "bin" / name
+        if venv_bin.exists():
+            print(f"Using {venv_bin} (activate your venv to put {name} on PATH).")
+            return str(venv_bin)
         print(f"Error: {name} not found on PATH.")
-        print("Install the package first (pip install -e . or uv tool install).")
+        print("Install the package first (pip install -e . or uv tool install),")
+        print("then make sure your virtual environment is activated.")
         sys.exit(1)
     return path
 

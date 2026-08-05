@@ -161,8 +161,12 @@ def loop() -> None:
         time.sleep(_poll_interval(cfg))
 
 
-if __name__ == "__main__":
+def main() -> None:
     try:
         loop()
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == "__main__":
+    main()
