@@ -76,6 +76,18 @@ CLI are host processes by design.
   globals in `common`/`server`); they never touch real `~`.`
 - When adding tests use Gherkin style comments (Given, When, Then, etc)
 
+## Linting
+
+Ruff handles both linting and formatting. Run before committing:
+
+```sh
+ruff check .          # lint
+ruff format .         # format
+ruff check . --fix    # auto-fix (safe fixes only)
+```
+
+CI enforces both. Dev install includes ruff: `pip install -e .[dev]`
+
 ## Keeping README in sync
 
 `README.md` is the user-facing documentation. It must stay in sync with the

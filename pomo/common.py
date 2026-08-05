@@ -12,6 +12,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import socket
@@ -31,9 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover
 # Version
 # ---------------------------------------------------------------------------
 
+
 def version() -> str:
     try:
         from importlib.metadata import version as _get_version
+
         return _get_version("pomo")
     except Exception:
         pass
@@ -77,9 +80,15 @@ def ensure_dirs() -> None:
 # Session model
 # ---------------------------------------------------------------------------
 
-def new_session(state: str, start_epoch: int, duration: int,
-                origin_machine: str, name: str | None = None,
-                project: str | None = None) -> dict:
+
+def new_session(
+    state: str,
+    start_epoch: int,
+    duration: int,
+    origin_machine: str,
+    name: str | None = None,
+    project: str | None = None,
+) -> dict:
     """Build a session record with a fresh id and updated_at."""
     if state not in ALL_STATES:
         raise ValueError(f"invalid state: {state!r}")
@@ -109,6 +118,7 @@ def is_idle(session: dict | None) -> bool:
 # ---------------------------------------------------------------------------
 # Local cache (JSON)
 # ---------------------------------------------------------------------------
+
 
 def _valid_session(obj: object) -> bool:
     """True if `obj` is a well-formed cached session.
@@ -161,15 +171,14 @@ def write_cache(session: dict) -> None:
 
 
 def clear_cache() -> None:
-    try:
+    with contextlib.suppress(FileNotFoundError):
         CACHE_FILE.unlink()
-    except FileNotFoundError:
-        pass
 
 
 # ---------------------------------------------------------------------------
 # Outbox (offline queue): newline-delimited JSON of pending pushes
 # ---------------------------------------------------------------------------
+
 
 def enqueue_outbox(action: str, session: dict) -> None:
     """Append a pending push. action is 'session' or 'end'."""
@@ -186,10 +195,8 @@ def read_outbox() -> list[dict]:
                 line = line.strip()
                 if not line:
                     continue
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     items.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
             return items
     except FileNotFoundError:
         return []
@@ -247,6 +254,7 @@ def load_config() -> dict:
 # HTTP JSON client
 # ---------------------------------------------------------------------------
 
+
 class ServerUnavailable(Exception):
     """Raised when the server cannot be reached (offline)."""
 
@@ -256,8 +264,7 @@ def _token() -> str | None:
     return tok or None
 
 
-def _request(method: str, url: str, payload: dict | None = None,
-             timeout: float = 4.0) -> dict:
+def _request(method: str, url: str, payload: dict | None = None, timeout: float = 4.0) -> dict:
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
@@ -272,7 +279,7 @@ def _request(method: str, url: str, payload: dict | None = None,
             body = resp.read()
     except urllib.error.HTTPError as exc:  # server reachable, returned error
         raise ServerUnavailable(f"HTTP {exc.code}: {exc.reason}") from exc
-    except (urllib.error.URLError, socket.timeout, OSError) as exc:
+    except (TimeoutError, urllib.error.URLError, OSError) as exc:
         raise ServerUnavailable(str(exc)) from exc
     if not body:
         return {}

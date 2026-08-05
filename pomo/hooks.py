@@ -82,8 +82,7 @@ def _build_env(event: str, session: dict, remote: bool) -> dict:
     return env
 
 
-def dispatch(event: str, session: dict | None, cfg: dict,
-             *, remote: bool = False) -> None:
+def dispatch(event: str, session: dict | None, cfg: dict, *, remote: bool = False) -> None:
     """Run all user hooks for a lifecycle event. Never raises.
 
     This is the single public entry point used by the CLI and the agent so

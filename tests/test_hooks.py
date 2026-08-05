@@ -9,8 +9,7 @@ import unittest
 
 from _util import isolate
 
-from pomo import common
-from pomo import hooks
+from pomo import common, hooks
 
 
 def _write_hook(event_dir, name: str, body: str):
@@ -37,8 +36,11 @@ class HooksTests(unittest.TestCase):
     def test_dispatch_runs_matching_hook(self):
         # Given: an executable hook script for pomodoro_start
         out = self.tmp / "ran.txt"
-        _write_hook(self._event_dir(hooks.POMODORO_START), "10-x.sh",
-                    f"#!/usr/bin/env bash\necho hi > {out}\n")
+        _write_hook(
+            self._event_dir(hooks.POMODORO_START),
+            "10-x.sh",
+            f"#!/usr/bin/env bash\necho hi > {out}\n",
+        )
         # When: dispatch is called for pomodoro_start
         session = common.new_session("pomodoro", 1, 60, "laptop")
         hooks.dispatch(hooks.POMODORO_START, session, self.cfg)
@@ -49,7 +51,8 @@ class HooksTests(unittest.TestCase):
         # Given: a hook script that captures env vars and stdin
         out = self.tmp / "ctx.txt"
         _write_hook(
-            self._event_dir(hooks.POMODORO_START), "10-ctx.sh",
+            self._event_dir(hooks.POMODORO_START),
+            "10-ctx.sh",
             "#!/usr/bin/env bash\n"
             f'printf "%s|%s|%s" "$POMO_EVENT" "$POMO_STATE" "$(cat)" > {out}\n',
         )
@@ -65,8 +68,9 @@ class HooksTests(unittest.TestCase):
     def test_disabled_hooks_do_not_run(self):
         # Given: a hook script, but hooks are disabled in config
         out = self.tmp / "nope.txt"
-        _write_hook(self._event_dir(hooks.POMODORO_START), "10-x.sh",
-                    f"#!/usr/bin/env bash\ntouch {out}\n")
+        _write_hook(
+            self._event_dir(hooks.POMODORO_START), "10-x.sh", f"#!/usr/bin/env bash\ntouch {out}\n"
+        )
         self.cfg["hooks"]["enabled"] = False
         # When: dispatch is called
         hooks.dispatch(hooks.POMODORO_START, None, self.cfg)
@@ -96,10 +100,8 @@ class HooksTests(unittest.TestCase):
         # Given: two hook scripts in the same event dir (20-b, 10-a)
         out = self.tmp / "order.txt"
         event_dir = self._event_dir(hooks.POMODORO_START)
-        _write_hook(event_dir, "20-b.sh",
-                    f"#!/usr/bin/env bash\nprintf b >> {out}\n")
-        _write_hook(event_dir, "10-a.sh",
-                    f"#!/usr/bin/env bash\nprintf a >> {out}\n")
+        _write_hook(event_dir, "20-b.sh", f"#!/usr/bin/env bash\nprintf b >> {out}\n")
+        _write_hook(event_dir, "10-a.sh", f"#!/usr/bin/env bash\nprintf a >> {out}\n")
         # When: dispatch is called
         hooks.dispatch(hooks.POMODORO_START, None, self.cfg)
         # Then: scripts run in lexical filename order (10-a before 20-b)
@@ -109,7 +111,8 @@ class HooksTests(unittest.TestCase):
         # Given: a hook script that captures POMO_SESSION_PROJECT
         out = self.tmp / "proj.txt"
         _write_hook(
-            self._event_dir(hooks.POMODORO_START), "10-proj.sh",
+            self._event_dir(hooks.POMODORO_START),
+            "10-proj.sh",
             f"#!/usr/bin/env bash\nprintf '%s' \"$POMO_SESSION_PROJECT\" > {out}\n",
         )
         # When: dispatch fires with a session that has a project
@@ -125,13 +128,17 @@ class HooksTests(unittest.TestCase):
         env = hooks._build_env("pomodoro_start", session, remote=False)
         # Then: exactly the expected POMO_* keys are present
         expected = {
-            "POMO_EVENT", "POMO_STATE", "POMO_START_EPOCH", "POMO_DURATION",
-            "POMO_ORIGIN_MACHINE", "POMO_SESSION_ID", "POMO_SESSION_PROJECT",
+            "POMO_EVENT",
+            "POMO_STATE",
+            "POMO_START_EPOCH",
+            "POMO_DURATION",
+            "POMO_ORIGIN_MACHINE",
+            "POMO_SESSION_ID",
+            "POMO_SESSION_PROJECT",
             "POMO_REMOTE",
         }
         pomo_keys = {k for k in env if k.startswith("POMO_")}
-        self.assertEqual(pomo_keys, expected,
-                         "POMO_* env vars changed — update README.md?")
+        self.assertEqual(pomo_keys, expected, "POMO_* env vars changed — update README.md?")
 
 
 if __name__ == "__main__":

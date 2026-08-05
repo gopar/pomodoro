@@ -6,19 +6,16 @@ concurrent writers (WAL + busy_timeout).
 
 from __future__ import annotations
 
-import datetime
 import sqlite3
 import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-
 from unittest.mock import patch
 
 from _util import isolate
 
-from pomo import common
-from pomo import server
+from pomo import common, server
 
 
 def _session(updated_at: float, state: str = "pomodoro", sid: str | None = None) -> dict:
@@ -132,8 +129,7 @@ class LWWTests(unittest.TestCase):
         with sqlite3.connect(server.DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT updated_at, state FROM sessions "
-                "WHERE id = 'a' ORDER BY updated_at DESC"
+                "SELECT updated_at, state FROM sessions WHERE id = 'a' ORDER BY updated_at DESC"
             ).fetchall()
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["updated_at"], 200.0)  # newer row intact
@@ -200,10 +196,8 @@ class LWWTests(unittest.TestCase):
 
     def test_get_today_sessions_filters_by_project(self):
         # Given: sessions with different projects today
-        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop",
-                                project="website")
-        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop",
-                                project="backend")
+        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop", project="website")
+        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop", project="backend")
         server.apply_session(s1)
         server.apply_session(s2)
         # When: get_today_sessions is called with project filter
@@ -214,12 +208,9 @@ class LWWTests(unittest.TestCase):
 
     def test_get_projects_returns_distinct(self):
         # Given: sessions with various projects
-        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop",
-                                project="website")
-        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop",
-                                project="backend")
-        s3 = common.new_session("pomodoro", int(time.time()) - 180, 60, "laptop",
-                                project="website")
+        s1 = common.new_session("pomodoro", int(time.time()) - 60, 60, "laptop", project="website")
+        s2 = common.new_session("pomodoro", int(time.time()) - 120, 60, "laptop", project="backend")
+        s3 = common.new_session("pomodoro", int(time.time()) - 180, 60, "laptop", project="website")
         server.apply_session(s1)
         server.apply_session(s2)
         server.apply_session(s3)
@@ -303,7 +294,8 @@ class ConcurrencyTests(unittest.TestCase):
 
         current = server.get_current_session()
         self.assertEqual(
-            current["id"], f"s{n - 1:02d}",
+            current["id"],
+            f"s{n - 1:02d}",
             "current pointer is not the highest-updated_at session",
         )
 
@@ -314,8 +306,9 @@ class ConcurrencyTests(unittest.TestCase):
     def test_concurrent_mixed_order_selects_global_max(self):
         # Given: updated_at values in shuffled order across threads
         # The winner must be the global maximum regardless of arrival order.
-        pairs = [(f"s{i:02d}", float(v)) for i, v in
-                 enumerate([50, 10, 99, 30, 70, 5, 88, 42, 60, 15])]
+        pairs = [
+            (f"s{i:02d}", float(v)) for i, v in enumerate([50, 10, 99, 30, 70, 5, 88, 42, 60, 15])
+        ]
         max_id = max(pairs, key=lambda p: p[1])[0]
 
         errors: list[Exception] = []

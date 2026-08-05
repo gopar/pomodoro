@@ -48,7 +48,6 @@ def _patch(test, module, name: str, value) -> None:
     test.addCleanup(setattr, module, name, original)
 
 
-
 def _rmtree(path: Path) -> None:
     import shutil
 

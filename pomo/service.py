@@ -7,6 +7,7 @@ the background. The binary must already be on ``PATH`` (installed via
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -31,14 +32,17 @@ def _binary(server: bool) -> str:
 
 
 def _pomo_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items()
-            if k.startswith(("POMO_SERVER_URL", "POMO_TOKEN",
-                             "POMO_PORT", "POMO_HOST", "POMO_DB_PATH"))}
+    return {
+        k: v
+        for k, v in os.environ.items()
+        if k.startswith(("POMO_SERVER_URL", "POMO_TOKEN", "POMO_PORT", "POMO_HOST", "POMO_DB_PATH"))
+    }
 
 
 # ---------------------------------------------------------------------------
 # macOS — launchd
 # ---------------------------------------------------------------------------
+
 
 def _macos_label(server: bool) -> str:
     return "pomo.server" if server else "pomo.agent"
@@ -58,7 +62,6 @@ def _macos_plist_content(server: bool) -> str:
     binary = _binary(server)
     label = _macos_label(server)
     log = str(_macos_log(server))
-    which = "server" if server else "agent"
     env_xml = ""
     for key, val in sorted(_pomo_env().items()):
         env_xml += f"        <key>{key}</key>\n"
@@ -127,7 +130,9 @@ def _macos_uninstall(server: bool) -> None:
 def _macos_check_running(server: bool) -> bool:
     label = _macos_label(server)
     result = subprocess.run(
-        ["launchctl", "list"], capture_output=True, text=True,
+        ["launchctl", "list"],
+        capture_output=True,
+        text=True,
     )
     for line in result.stdout.splitlines():
         if label in line and "PID" not in line:
@@ -154,15 +159,14 @@ def _macos_logs(server: bool) -> None:
     if not log.exists():
         print(f"No log file yet ({log}).")
         return
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         subprocess.run(["tail", "-f", str(log)], check=False)
-    except KeyboardInterrupt:
-        pass
 
 
 # ---------------------------------------------------------------------------
 # Linux — systemd user
 # ---------------------------------------------------------------------------
+
 
 def _linux_service_name(server: bool) -> str:
     return "pomo-server" if server else "pomo-agent"
@@ -174,12 +178,11 @@ def _linux_service_path(server: bool) -> Path:
 
 def _linux_service_content(server: bool) -> str:
     binary = _binary(server)
-    which = "server" if server else "agent"
     env_lines = ""
     for key, val in sorted(_pomo_env().items()):
         env_lines += f"Environment={key}={val}\n"
     return f"""[Unit]
-Description=Pomodoro {'sync server' if server else 'local agent'}
+Description=Pomodoro {"sync server" if server else "local agent"}
 After=network-online.target
 Wants=network-online.target
 
@@ -207,7 +210,8 @@ def _linux_install(server: bool) -> None:
     svc_path.write_text(_linux_service_content(server), encoding="utf-8")
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
     result = subprocess.run(
-        ["systemctl", "--user", "enable", "--now", name], check=False,
+        ["systemctl", "--user", "enable", "--now", name],
+        check=False,
     )
     if result.returncode == 0:
         print(f"{name}: installed and started.")
@@ -220,8 +224,7 @@ def _linux_uninstall(server: bool) -> None:
     name = _linux_service_name(server)
     svc_path = _linux_service_path(server)
     if svc_path.exists():
-        subprocess.run(["systemctl", "--user", "disable", "--now", name],
-                       check=False)
+        subprocess.run(["systemctl", "--user", "disable", "--now", name], check=False)
         svc_path.unlink(missing_ok=True)
         print(f"{name}: stopped and removed.")
     else:
@@ -232,7 +235,8 @@ def _linux_check_running(server: bool) -> bool:
     name = _linux_service_name(server)
     result = subprocess.run(
         ["systemctl", "--user", "is-active", name],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return result.stdout.strip() == "active"
 
@@ -245,7 +249,8 @@ def _linux_status(server: bool) -> None:
         return
     result = subprocess.run(
         ["systemctl", "--user", "is-active", name],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     status = result.stdout.strip()
     print(f"{name}: {status}.")
@@ -253,15 +258,14 @@ def _linux_status(server: bool) -> None:
 
 def _linux_logs(server: bool) -> None:
     name = _linux_service_name(server)
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         subprocess.run(["journalctl", "--user", "-u", name, "-f"], check=False)
-    except KeyboardInterrupt:
-        pass
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def _platform() -> str:
     if sys.platform == "darwin":

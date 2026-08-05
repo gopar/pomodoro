@@ -9,14 +9,11 @@ from __future__ import annotations
 import io
 import time
 import unittest
-
 from unittest.mock import patch
 
 from _util import isolate
 
-from pomo import agent
-from pomo import common
-from pomo import hooks
+from pomo import agent, common, hooks
 
 
 class TickTimerTests(unittest.TestCase):
@@ -26,12 +23,17 @@ class TickTimerTests(unittest.TestCase):
         isolate(self)
         self.events: list[str] = []
 
-        p = patch.object(hooks, "dispatch",
-                         side_effect=lambda event, session, cfg, **kw: self.events.append(event))
-        p.start(); self.addCleanup(p.stop)
+        p = patch.object(
+            hooks,
+            "dispatch",
+            side_effect=lambda event, session, cfg, **kw: self.events.append(event),
+        )
+        p.start()
+        self.addCleanup(p.stop)
 
         p = patch.object(common, "post_session", return_value={})
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
         self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
 
@@ -89,6 +91,7 @@ class TickTimerTests(unittest.TestCase):
     def test_malformed_cache_is_noop(self):
         # Given: cache has active state but missing required numeric fields
         import json
+
         common.ensure_dirs()
         common.CACHE_FILE.write_text(
             json.dumps({"state": "pomodoro", "id": "x", "updated_at": 1.0}),
@@ -121,9 +124,11 @@ class PollServerTests(unittest.TestCase):
         isolate(self)
         self.adopted: list[dict] = []
 
-        p = patch.object(agent, "on_remote_adopt",
-                         side_effect=lambda session, cfg: self.adopted.append(session))
-        p.start(); self.addCleanup(p.stop)
+        p = patch.object(
+            agent, "on_remote_adopt", side_effect=lambda session, cfg: self.adopted.append(session)
+        )
+        p.start()
+        self.addCleanup(p.stop)
 
         self.cfg = {"server_url": "http://x", "machine_name": "laptop"}
 
@@ -198,7 +203,8 @@ class OnRemoteAdoptTests(unittest.TestCase):
             self.events.append((event, remote))
 
         p = patch.object(hooks, "dispatch", new=record)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
         self.cfg = {
             "server_url": "http://x",
@@ -252,21 +258,26 @@ class LoopResilienceTests(unittest.TestCase):
     def setUp(self):
         isolate(self)
         # Config with a tiny interval; loop re-reads config each iteration.
-        p = patch.object(common, "load_config",
-                         return_value={"server_url": "http://x",
-                                       "machine_name": "laptop",
-                                       "poll_interval": 0})
-        p.start(); self.addCleanup(p.stop)
+        p = patch.object(
+            common,
+            "load_config",
+            return_value={"server_url": "http://x", "machine_name": "laptop", "poll_interval": 0},
+        )
+        p.start()
+        self.addCleanup(p.stop)
 
         # Neutralize the network-y steps by default.
         p = patch.object(agent, "flush_outbox", return_value=None)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
         p = patch.object(agent, "poll_server", return_value=None)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
         # Suppress agent startup log during tests.
         p = patch.object(agent.sys, "stderr", io.StringIO())
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_loop_survives_iteration_error_and_continues(self):
         # Given: tick_timer raises RuntimeError on first call, succeeds after
@@ -282,8 +293,10 @@ class LoopResilienceTests(unittest.TestCase):
             if self.calls >= 2:
                 raise _StopLoop
 
-        with patch.object(agent, "tick_timer", new=flaky), \
-             patch.object(agent.time, "sleep", side_effect=sleeper):
+        with (
+            patch.object(agent, "tick_timer", new=flaky),
+            patch.object(agent.time, "sleep", side_effect=sleeper),
+        ):
             # When: the loop runs
             # Then: it survives the RuntimeError and continues iterating
             with self.assertRaises(_StopLoop):
@@ -295,8 +308,10 @@ class LoopResilienceTests(unittest.TestCase):
         def interrupt(cfg):
             raise KeyboardInterrupt
 
-        with patch.object(agent, "tick_timer", new=interrupt), \
-             patch.object(agent.time, "sleep", return_value=None):
+        with (
+            patch.object(agent, "tick_timer", new=interrupt),
+            patch.object(agent.time, "sleep", return_value=None),
+        ):
             # When / Then: KeyboardInterrupt propagates (the loop does not swallow it)
             with self.assertRaises(KeyboardInterrupt):
                 agent.loop()
@@ -310,11 +325,18 @@ class LoopResilienceTests(unittest.TestCase):
                 raise _StopLoop
             sleep_args.append(secs)
 
-        with patch.object(common, "load_config",
-                          return_value={"server_url": "http://x",
-                                        "machine_name": "laptop",
-                                        "poll_interval": 1}), \
-             patch.object(agent.time, "sleep", side_effect=capture_sleep):
+        with (
+            patch.object(
+                common,
+                "load_config",
+                return_value={
+                    "server_url": "http://x",
+                    "machine_name": "laptop",
+                    "poll_interval": 1,
+                },
+            ),
+            patch.object(agent.time, "sleep", side_effect=capture_sleep),
+        ):
             # When: the loop runs
             with self.assertRaises(_StopLoop):
                 agent.loop()

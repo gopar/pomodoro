@@ -233,9 +233,7 @@ class ConfigTests(unittest.TestCase):
     def test_nested_tables_merge_not_replace(self):
         # Given: a config file overriding only hooks.timeout
         common.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        common.CONFIG_FILE.write_text(
-            "[hooks]\ntimeout = 3\n", encoding="utf-8"
-        )
+        common.CONFIG_FILE.write_text("[hooks]\ntimeout = 3\n", encoding="utf-8")
         # When: config is loaded
         cfg = common.load_config()
         # Then: overridden key takes new value

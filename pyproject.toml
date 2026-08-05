@@ -9,6 +9,9 @@ description = "A multi-machine pomodoro timer that syncs via a home-base server.
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["ruff"]
+
 [project.scripts]
 pomo = "pomo.cli:main"
 pomo-agent = "pomo.agent:main"
@@ -16,3 +19,30 @@ pomo-server = "pomo.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pomo"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = ["N818"]  # exception class names (ServerUnavailable is fine)
+
+[tool.ruff.lint.isort]
+known-first-party = ["pomo"]
+
+[tool.ruff.lint.per-file-ignores]
+"pomo/*.py" = ["UP036"]  # version guard for 3.11+ is intentional
+"tests/_util.py" = ["E402"]  # import after sys.path insertion
+"tests/*.py" = ["E702", "SIM117"]  # patch + addCleanup semicolons, nested with
+
+[tool.ruff.format]
+quote-style = "double"

@@ -13,14 +13,12 @@ import sys
 import time
 import unittest
 from datetime import datetime
-
 from unittest.mock import patch
 
 from _util import isolate
 
-from pomo import common
-from pomo import hooks
 from pomo import cli as pomo
+from pomo import common, hooks
 
 
 class Base(unittest.TestCase):
@@ -31,28 +29,38 @@ class Base(unittest.TestCase):
         self.events: list[str] = []
         self.event_sessions: list[dict] = []
 
-        p = patch.object(hooks, "dispatch",
-                         side_effect=lambda e, s, c, **kw: (
-                             self.events.append(e),
-                             self.event_sessions.append(s),
-                         ))
-        p.start(); self.addCleanup(p.stop)
+        p = patch.object(
+            hooks,
+            "dispatch",
+            side_effect=lambda e, s, c, **kw: (
+                self.events.append(e),
+                self.event_sessions.append(s),
+            ),
+        )
+        p.start()
+        self.addCleanup(p.stop)
 
         p = patch.object(common, "post_session", return_value={})
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
         p = patch.object(common, "post_end", return_value={})
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
         p = patch.object(common, "enqueue_outbox", return_value=None)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
         p = patch.object(pomo, "_confirm_overwrite", return_value=True)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
         self._stdout = io.StringIO()
         self._stderr = io.StringIO()
         p = patch.object(sys, "stdout", self._stdout)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
         p = patch.object(sys, "stderr", self._stderr)
-        p.start(); self.addCleanup(p.stop)
+        p.start()
+        self.addCleanup(p.stop)
 
     def _active(self, state: str = "pomodoro") -> dict:
         s = common.new_session(state, int(time.time()), 25 * 60, "laptop")
@@ -71,6 +79,7 @@ class Base(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Tests documenting current (broken) behaviour
 # ---------------------------------------------------------------------------
+
 
 class CmdBreakTests(Base):
     """pomo break N — behaviour with an active pomodoro."""
@@ -192,20 +201,23 @@ class CmdStatusTests(Base):
 
     def test_status_json_idle_no_cache(self):
         pomo.cmd_status(json_output=True)
-        self.assertEqual(json.loads(self._stdout.getvalue()),
-                         {"state": "idle", "display": "No active session"})
+        self.assertEqual(
+            json.loads(self._stdout.getvalue()), {"state": "idle", "display": "No active session"}
+        )
 
     def test_status_json_idle_ended_cache(self):
         common.write_cache({"state": "ended"})
         pomo.cmd_status(json_output=True)
-        self.assertEqual(json.loads(self._stdout.getvalue()),
-                         {"state": "idle", "display": "No active session"})
+        self.assertEqual(
+            json.loads(self._stdout.getvalue()), {"state": "idle", "display": "No active session"}
+        )
 
     def test_status_json_idle_marker_cache(self):
         common.write_cache({"state": "idle"})
         pomo.cmd_status(json_output=True)
-        self.assertEqual(json.loads(self._stdout.getvalue()),
-                         {"state": "idle", "display": "No active session"})
+        self.assertEqual(
+            json.loads(self._stdout.getvalue()), {"state": "idle", "display": "No active session"}
+        )
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_json_pomodoro_countdown(self, _mock):
@@ -349,8 +361,7 @@ class CmdStatusTests(Base):
         # Given: a named pomodoro session
         now = 1722520000.0
         duration = 25 * 60
-        s = common.new_session("pomodoro", int(now - 60), duration,
-                                "laptop", name="project-x")
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop", name="project-x")
         common.write_cache(s)
 
         # When: status is requested
@@ -363,8 +374,7 @@ class CmdStatusTests(Base):
         # Given: a named pomodoro session
         now = 1722520000.0
         duration = 25 * 60
-        s = common.new_session("pomodoro", int(now - 60), duration,
-                                "laptop", name="project-x")
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop", name="project-x")
         common.write_cache(s)
 
         # When: status --json is requested
@@ -374,14 +384,12 @@ class CmdStatusTests(Base):
         self.assertEqual(out["name"], "project-x")
         self.assertEqual(out["display"], "🍅 24:00 [project-x]")
 
-
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_with_project_display(self, _mock):
         # Given: a session with a project
         now = 1722520000.0
         duration = 25 * 60
-        s = common.new_session("pomodoro", int(now - 60), duration,
-                                "laptop", project="website")
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop", project="website")
         common.write_cache(s)
         # When: status is requested
         pomo.cmd_status()
@@ -393,22 +401,21 @@ class CmdStatusTests(Base):
         # Given: a session with both project and name
         now = 1722520000.0
         duration = 25 * 60
-        s = common.new_session("pomodoro", int(now - 60), duration,
-                                "laptop", name="fix-auth", project="website")
+        s = common.new_session(
+            "pomodoro", int(now - 60), duration, "laptop", name="fix-auth", project="website"
+        )
         common.write_cache(s)
         # When: status is requested
         pomo.cmd_status()
         # Then: both are shown in brackets
-        self.assertEqual(self._stdout.getvalue().strip(),
-                         "🍅 24:00 [website] [fix-auth]")
+        self.assertEqual(self._stdout.getvalue().strip(), "🍅 24:00 [website] [fix-auth]")
 
     @patch.object(time, "time", return_value=1722520000.0)
     def test_status_with_project_json(self, _mock):
         # Given: a session with a project
         now = 1722520000.0
         duration = 25 * 60
-        s = common.new_session("pomodoro", int(now - 60), duration,
-                                "laptop", project="website")
+        s = common.new_session("pomodoro", int(now - 60), duration, "laptop", project="website")
         common.write_cache(s)
         # When: status --json is requested
         pomo.cmd_status(json_output=True)
@@ -424,8 +431,9 @@ class CmdClearInheritanceTests(Base):
     @patch.object(builtins, "input", side_effect=["5"])
     def test_clear_inherits_name_and_project(self, _mock):
         # Given: an active pomodoro with name and project
-        s = common.new_session("pomodoro", int(time.time()), 25 * 60,
-                                "laptop", name="fix-auth", project="website")
+        s = common.new_session(
+            "pomodoro", int(time.time()), 25 * 60, "laptop", name="fix-auth", project="website"
+        )
         common.write_cache(s)
         # When: pomo clear starts a break
         pomo.cmd_clear()
@@ -438,8 +446,7 @@ class CmdClearInheritanceTests(Base):
     @patch.object(builtins, "input", side_effect=["5"])
     def test_clear_inherits_only_name(self, _mock):
         # Given: an active pomodoro with name but no project
-        s = common.new_session("pomodoro", int(time.time()), 25 * 60,
-                                "laptop", name="fix-auth")
+        s = common.new_session("pomodoro", int(time.time()), 25 * 60, "laptop", name="fix-auth")
         common.write_cache(s)
         # When: pomo clear starts a break
         pomo.cmd_clear()
@@ -451,8 +458,7 @@ class CmdClearInheritanceTests(Base):
     @patch.object(builtins, "input", side_effect=["5"])
     def test_clear_inherits_only_project(self, _mock):
         # Given: an active pomodoro with project but no name
-        s = common.new_session("pomodoro", int(time.time()), 25 * 60,
-                                "laptop", project="website")
+        s = common.new_session("pomodoro", int(time.time()), 25 * 60, "laptop", project="website")
         common.write_cache(s)
         # When: pomo clear starts a break
         pomo.cmd_clear()
@@ -506,8 +512,7 @@ class CmdHistoryTests(Base):
         # Then: empty message shown
         self.assertIn("No sessions today", self._stdout.getvalue())
 
-    @patch.object(common, "get_sessions",
-                  side_effect=common.ServerUnavailable("offline"))
+    @patch.object(common, "get_sessions", side_effect=common.ServerUnavailable("offline"))
     def test_history_offline_errors(self, _mock):
         # Given: server is unreachable
         # When / Then: pomo history exits with an error
@@ -529,8 +534,7 @@ class CmdHistoryTests(Base):
     def test_history_with_project_in_output(self, get_sessions_mock):
         # Given: a session with a project
         now = 1722520000.0
-        s = common.new_session("pomodoro", int(now), 25 * 60, "laptop",
-                                project="website")
+        s = common.new_session("pomodoro", int(now), 25 * 60, "laptop", project="website")
         s["ended_at"] = now + 25 * 60
         get_sessions_mock.return_value = [s]
         # When: pomo history is called
@@ -543,8 +547,7 @@ class CmdHistoryTests(Base):
 class CmdProjectsTests(Base):
     """pomo projects — list all defined projects."""
 
-    @patch.object(common, "get_projects",
-                  side_effect=common.ServerUnavailable("offline"))
+    @patch.object(common, "get_projects", side_effect=common.ServerUnavailable("offline"))
     def test_projects_offline_errors(self, _mock):
         # Given: server is unreachable
         # When / Then: pomo projects exits with an error
@@ -560,9 +563,9 @@ class CmdProjectsTests(Base):
         # Then: empty message shown
         self.assertIn("No projects defined", self._stdout.getvalue())
 
-    @patch.object(common, "get_projects", return_value=[
-        {"project": "backend"}, {"project": "website"}
-    ])
+    @patch.object(
+        common, "get_projects", return_value=[{"project": "backend"}, {"project": "website"}]
+    )
     def test_projects_list(self, _mock):
         # Given: projects exist
         # When: pomo projects is called
@@ -571,12 +574,12 @@ class CmdProjectsTests(Base):
         output = self._stdout.getvalue()
         self.assertIn("backend", output)
         self.assertIn("website", output)
-        lines = [l for l in output.split("\n") if l]
+        lines = [line for line in output.split("\n") if line]
         self.assertEqual(lines, ["backend", "website"])
 
-    @patch.object(common, "get_projects", return_value=[
-        {"project": "backend"}, {"project": "website"}
-    ])
+    @patch.object(
+        common, "get_projects", return_value=[{"project": "backend"}, {"project": "website"}]
+    )
     def test_projects_json(self, _mock):
         # Given: projects exist
         # When: pomo projects --json is called

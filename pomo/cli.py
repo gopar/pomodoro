@@ -26,8 +26,7 @@ from datetime import datetime
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-from pomo import common
-from pomo import hooks
+from pomo import common, hooks
 
 
 def _cfg() -> dict:
@@ -72,24 +71,23 @@ def _fmt_time(seconds: int) -> str:
 # actions
 # ---------------------------------------------------------------------------
 
-def start_pomodoro(mins: int, name: str | None = None,
-                   project: str | None = None) -> None:
+
+def start_pomodoro(mins: int, name: str | None = None, project: str | None = None) -> None:
     cfg = _cfg()
-    session = common.new_session("pomodoro", int(time.time()), mins * 60,
-                                 cfg["machine_name"], name=name,
-                                 project=project)
+    session = common.new_session(
+        "pomodoro", int(time.time()), mins * 60, cfg["machine_name"], name=name, project=project
+    )
     common.write_cache(session)
     hooks.dispatch(hooks.POMODORO_START, session, cfg)
     _push("session", session)
     print(f"Pomodoro started for {mins} minute(s) 🍅")
 
 
-def start_break(mins: int, name: str | None = None,
-                project: str | None = None) -> None:
+def start_break(mins: int, name: str | None = None, project: str | None = None) -> None:
     cfg = _cfg()
-    session = common.new_session("break", int(time.time()), mins * 60,
-                                 cfg["machine_name"], name=name,
-                                 project=project)
+    session = common.new_session(
+        "break", int(time.time()), mins * 60, cfg["machine_name"], name=name, project=project
+    )
     common.write_cache(session)
     hooks.dispatch(hooks.BREAK_START, session, cfg)
     _push("session", session)
@@ -123,8 +121,8 @@ def _confirm_overwrite() -> bool:
 # commands
 # ---------------------------------------------------------------------------
 
-def cmd_start(mins: int, name: str | None = None,
-              project: str | None = None) -> None:
+
+def cmd_start(mins: int, name: str | None = None, project: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
@@ -134,8 +132,7 @@ def cmd_start(mins: int, name: str | None = None,
     start_pomodoro(mins, name=name, project=project)
 
 
-def cmd_break(mins: int, name: str | None = None,
-              project: str | None = None) -> None:
+def cmd_break(mins: int, name: str | None = None, project: str | None = None) -> None:
     if not _confirm_overwrite():
         print("Aborted.")
         return
@@ -190,7 +187,12 @@ def cmd_status(json_output: bool = False) -> None:
     overtime_of = {"pomodoro": "overtime", "break": "break-overtime"}
     effective_state = overtime_of.get(cache_state, cache_state) if remaining <= 0 else cache_state
 
-    icon = {"pomodoro": "🍅", "overtime": "⏰", "break": "☕", "break-overtime": "☕"}.get(effective_state, "")
+    icon = {
+        "pomodoro": "🍅",
+        "overtime": "⏰",
+        "break": "☕",
+        "break-overtime": "☕",
+    }.get(effective_state, "")
     time_str = _fmt_time(-remaining) if remaining < 0 else _fmt_time(remaining)
     if remaining < 0:
         time_str = f"+{time_str}"
@@ -204,22 +206,25 @@ def cmd_status(json_output: bool = False) -> None:
     display = " ".join(parts)
 
     if json_output:
-        print(json.dumps({
-            "state": effective_state,
-            "start_epoch": start,
-            "duration": duration,
-            "elapsed": elapsed,
-            "remaining": remaining,
-            "display": display,
-            "name": name,
-            "project": project,
-        }))
+        print(
+            json.dumps(
+                {
+                    "state": effective_state,
+                    "start_epoch": start,
+                    "duration": duration,
+                    "elapsed": elapsed,
+                    "remaining": remaining,
+                    "display": display,
+                    "name": name,
+                    "project": project,
+                }
+            )
+        )
     else:
         print(display)
 
 
-def cmd_history(json_output: bool = False,
-                project: str | None = None) -> None:
+def cmd_history(json_output: bool = False, project: str | None = None) -> None:
     cfg = _cfg()
     try:
         sessions = common.get_sessions(cfg["server_url"], project=project)
@@ -283,8 +288,7 @@ def _argparser() -> argparse.ArgumentParser:
         prog="pomo",
         description="Start, stop, and track pomodoro sessions.",
     )
-    parser.add_argument("--version", action="version",
-                        version=f"pomo v{common.version()}")
+    parser.add_argument("--version", action="version", version=f"pomo v{common.version()}")
     sub = parser.add_subparsers(dest="command")
 
     p = sub.add_parser("start", help="Start a pomodoro for N minutes")
@@ -317,20 +321,18 @@ def _argparser() -> argparse.ArgumentParser:
     svc_subs = svc.add_subparsers(dest="service_command")
 
     p = svc_subs.add_parser("install", help="Install and start the service")
-    p.add_argument("--server", action="store_true",
-                   help="Install server service (default: agent)")
+    p.add_argument("--server", action="store_true", help="Install server service (default: agent)")
 
     p = svc_subs.add_parser("uninstall", help="Stop and remove the service")
-    p.add_argument("--server", action="store_true",
-                   help="Uninstall server service (default: agent)")
+    p.add_argument(
+        "--server", action="store_true", help="Uninstall server service (default: agent)"
+    )
 
     p = svc_subs.add_parser("status", help="Check service status")
-    p.add_argument("--server", action="store_true",
-                   help="Check server service (default: agent)")
+    p.add_argument("--server", action="store_true", help="Check server service (default: agent)")
 
     p = svc_subs.add_parser("logs", help="Tail service logs")
-    p.add_argument("--server", action="store_true",
-                   help="Tail server logs (default: agent)")
+    p.add_argument("--server", action="store_true", help="Tail server logs (default: agent)")
 
     return parser
 
@@ -353,12 +355,15 @@ def main(argv: list[str] | None = None) -> None:
         cmd_projects(json_output=args.json)
     elif args.command == "agent":
         from pomo import agent
+
         agent.main()
     elif args.command == "server":
         from pomo import server
+
         server.main()
     elif args.command == "service":
         from pomo import service
+
         if args.service_command == "install":
             service.install(server=args.server)
         elif args.service_command == "uninstall":

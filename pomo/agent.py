@@ -20,6 +20,7 @@ OS-agnostic. Timer stays local so everything works offline. Stdlib only.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import time
 import traceback
@@ -27,8 +28,7 @@ import traceback
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-from pomo import common
-from pomo import hooks
+from pomo import common, hooks
 
 OVERTIME_OF = {"pomodoro": "overtime", "break": "break-overtime"}
 MIN_POLL_INTERVAL = 5.0
@@ -52,6 +52,7 @@ def on_remote_adopt(session: dict, cfg: dict) -> None:
 # ---------------------------------------------------------------------------
 # Sync helpers
 # ---------------------------------------------------------------------------
+
 
 def _updated_at(session: dict | None) -> float:
     if not session:
@@ -119,7 +120,9 @@ def tick_timer(cfg: dict) -> None:
     session["state"] = overtime_state
     session["updated_at"] = time.time()
     common.write_cache(session)
-    overtime_event = hooks.BREAK_OVERTIME if overtime_state == "break-overtime" else hooks.POMODORO_OVERTIME
+    overtime_event = (
+        hooks.BREAK_OVERTIME if overtime_state == "break-overtime" else hooks.POMODORO_OVERTIME
+    )
     hooks.dispatch(overtime_event, session, cfg)
     try:
         common.post_session(cfg["server_url"], session)
@@ -131,8 +134,7 @@ def _poll_interval(cfg: dict) -> float:
     raw = float(cfg.get("poll_interval", 5))
     if raw < MIN_POLL_INTERVAL:
         sys.stderr.write(
-            f"pomo-agent: poll_interval clamped to {MIN_POLL_INTERVAL}s "
-            f"(config had {raw}s)\n"
+            f"pomo-agent: poll_interval clamped to {MIN_POLL_INTERVAL}s (config had {raw}s)\n"
         )
         return MIN_POLL_INTERVAL
     return raw
@@ -162,10 +164,8 @@ def loop() -> None:
 
 
 def main() -> None:
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         loop()
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

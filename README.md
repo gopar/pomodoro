@@ -263,8 +263,16 @@ Tests are stdlib `unittest`, zero dependencies:
 python3 -m unittest discover -s tests -t tests
 ```
 
-CI runs the suite on Python 3.11–3.14 + a `compileall` syntax gate. See
-`AGENTS.md` for architecture invariants.
+Dev install includes ruff for linting and formatting:
+
+```sh
+pip install -e ".[dev]"
+ruff check .
+ruff format .
+```
+
+CI runs the test suite on Python 3.11–3.14, plus ruff lint/format and a
+`compileall` syntax gate. See `AGENTS.md` for architecture invariants.
 
 ---
 

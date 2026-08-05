@@ -56,6 +56,7 @@ class RequestTooLarge(Exception):
 # Storage
 # ---------------------------------------------------------------------------
 
+
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     # isolation_level=None -> autocommit; we drive transactions explicitly with
@@ -93,21 +94,14 @@ def init_db() -> None:
             "CHECK (singleton = 0), session_id TEXT, updated_at REAL)"
         )
         conn.execute(
-            "INSERT OR IGNORE INTO current (singleton, session_id, updated_at) "
-            "VALUES (0, NULL, 0)"
+            "INSERT OR IGNORE INTO current (singleton, session_id, updated_at) VALUES (0, NULL, 0)"
         )
-        try:
+        with contextlib.suppress(sqlite3.OperationalError):
             conn.execute("ALTER TABLE sessions ADD COLUMN name TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
-        try:
+        with contextlib.suppress(sqlite3.OperationalError):
             conn.execute("ALTER TABLE sessions ADD COLUMN project TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
-        try:
+        with contextlib.suppress(sqlite3.OperationalError):
             conn.execute("ALTER TABLE sessions ADD COLUMN kind TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
 
 
 def _row_to_session(row: sqlite3.Row) -> dict:
@@ -131,21 +125,17 @@ def _current_session_locked(conn: sqlite3.Connection) -> dict:
     Shared by the public getter and apply_session (so the returned `current`
     can be read inside the same transaction, closing the read-after-commit gap).
     """
-    row = conn.execute(
-        "SELECT session_id FROM current WHERE singleton = 0"
-    ).fetchone()
+    row = conn.execute("SELECT session_id FROM current WHERE singleton = 0").fetchone()
     if not row or not row["session_id"]:
         return common.idle_session()
     srow = conn.execute(
-        "SELECT * FROM sessions WHERE id = ? ORDER BY updated_at DESC LIMIT 1",
-        (row["session_id"],)
+        "SELECT * FROM sessions WHERE id = ? ORDER BY updated_at DESC LIMIT 1", (row["session_id"],)
     ).fetchone()
     if not srow:
         return common.idle_session()
     session = _row_to_session(srow)
     if session["state"] == "ended":
-        return {"state": "idle", "updated_at": session["updated_at"],
-                "session_id": session["id"]}
+        return {"state": "idle", "updated_at": session["updated_at"], "session_id": session["id"]}
     return session
 
 
@@ -165,8 +155,7 @@ def apply_session(session: dict) -> tuple[bool, dict]:
     WHERE clause (`? >= updated_at`), so it is atomic and cannot lose an
     update under concurrent writers.
     """
-    required = ("id", "state", "start_epoch", "duration",
-                "origin_machine", "updated_at")
+    required = ("id", "state", "start_epoch", "duration", "origin_machine", "updated_at")
     for key in required:
         if key not in session:
             raise ValueError(f"missing field: {key}")
@@ -180,13 +169,20 @@ def apply_session(session: dict) -> tuple[bool, dict]:
             # Always record history (even losers) for a faithful log.
             conn.execute(
                 "INSERT OR REPLACE INTO sessions "
-                "(id, state, start_epoch, duration, origin_machine, updated_at, ended_at, name, project, kind) "
+                "(id, state, start_epoch, duration, origin_machine, "
+                "updated_at, ended_at, name, project, kind) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    session["id"], session["state"], int(session["start_epoch"]),
-                    int(session["duration"]), session["origin_machine"],
-                    incoming, session.get("ended_at"), session.get("name"),
-                    session.get("project"), session.get("kind"),
+                    session["id"],
+                    session["state"],
+                    int(session["start_epoch"]),
+                    int(session["duration"]),
+                    session["origin_machine"],
+                    incoming,
+                    session.get("ended_at"),
+                    session.get("name"),
+                    session.get("project"),
+                    session.get("kind"),
                 ),
             )
             cur = conn.execute(
@@ -234,9 +230,7 @@ def get_today_sessions(project: str | None = None) -> list[dict]:
             project_inner = "AND project = ?"
             project_outer = "AND s.project = ?"
             params = [project, project]
-        rows = conn.execute(
-            sql.format(project_inner, project_outer), params
-        ).fetchall()
+        rows = conn.execute(sql.format(project_inner, project_outer), params).fetchall()
     return [_row_to_session(r) for r in rows]
 
 
@@ -257,6 +251,7 @@ def get_projects() -> list[dict]:
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "pomo/1.0"
@@ -287,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(raw) if raw else {}
 
     def log_message(self, fmt, *args):  # quieter logs
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write(f"{self.address_string()} - {fmt % args}\n")
 
     # -- routes -----------------------------------------------------------
     def do_GET(self):
@@ -339,10 +334,8 @@ def main() -> None:
         sys.stderr.write("auth: bearer token REQUIRED\n")
     else:
         sys.stderr.write("auth: NONE (network-level only)\n")
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

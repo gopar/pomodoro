@@ -22,7 +22,9 @@ def _assert_snapshot(name: str, args: list[str]) -> None:
     """Run `pomo.cli <args>` and compare stdout to the snapshot file."""
     result = subprocess.run(
         [sys.executable, "-m", "pomo.cli", *args],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
     )
     actual = result.stdout.rstrip()
 
@@ -34,18 +36,19 @@ def _assert_snapshot(name: str, args: list[str]) -> None:
     expected = snapshot_path.read_text(encoding="utf-8").rstrip()
 
     if actual != expected:
-        diff = "\n".join(difflib.unified_diff(
-            expected.splitlines(), actual.splitlines(),
-            fromfile=str(snapshot_path), tofile="current output",
-            lineterm="",
-        ))
-        raise AssertionError(
-            f"help output changed for {name} ({REMINDER}):\n{diff}"
+        diff = "\n".join(
+            difflib.unified_diff(
+                expected.splitlines(),
+                actual.splitlines(),
+                fromfile=str(snapshot_path),
+                tofile="current output",
+                lineterm="",
+            )
         )
+        raise AssertionError(f"help output changed for {name} ({REMINDER}):\n{diff}")
 
 
-@unittest.skipIf(sys.version_info < (3, 13),
-                   "argparse help format differs before Python 3.13")
+@unittest.skipIf(sys.version_info < (3, 13), "argparse help format differs before Python 3.13")
 class PomoHelpSnapshotTests(unittest.TestCase):
     def test_pomo_help(self):
         _assert_snapshot("pomo_help", ["--help"])

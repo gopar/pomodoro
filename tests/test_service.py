@@ -5,9 +5,7 @@ pure functions are tested directly."""
 from __future__ import annotations
 
 import os
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from _util import isolate
@@ -39,8 +37,7 @@ class PlatformTests(unittest.TestCase):
 class BinaryTests(unittest.TestCase):
     def test_binary_found(self):
         # When: pomo-agent is on PATH
-        with patch.object(service.shutil, "which",
-                          return_value="/usr/bin/pomo-agent"):
+        with patch.object(service.shutil, "which", return_value="/usr/bin/pomo-agent"):
             path = service._binary(server=False)
             # Then: a truthy path is returned
             self.assertEqual(path, "/usr/bin/pomo-agent")
@@ -105,8 +102,9 @@ class PlistContentTests(unittest.TestCase):
     def test_plist_content_contains_env(self):
         # Given: POMO_SERVER_URL is set
         with patch.object(service, "_binary", return_value="/usr/bin/pomo-agent"):
-            with patch.object(service, "_pomo_env",
-                              return_value={"POMO_SERVER_URL": "http://s:8787"}):
+            with patch.object(
+                service, "_pomo_env", return_value={"POMO_SERVER_URL": "http://s:8787"}
+            ):
                 content = service._macos_plist_content(server=False)
                 # Then: plist contains the env var
                 self.assertIn("POMO_SERVER_URL", content)
@@ -131,8 +129,7 @@ class LinuxServiceContentTests(unittest.TestCase):
     def test_service_content_contains_env(self):
         # Given: POMO_TOKEN is set
         with patch.object(service, "_binary", return_value="/usr/bin/pomo-agent"):
-            with patch.object(service, "_pomo_env",
-                              return_value={"POMO_TOKEN": "secret"}):
+            with patch.object(service, "_pomo_env", return_value={"POMO_TOKEN": "secret"}):
                 content = service._linux_service_content(server=False)
                 # Then: service file contains the env var
                 self.assertIn("POMO_TOKEN", content)
