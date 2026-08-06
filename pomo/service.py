@@ -28,6 +28,7 @@ def _binary(server: bool) -> str:
         print("Install the package first (pip install -e . or uv tool install),")
         print("then make sure your virtual environment is activated.")
         sys.exit(1)
+    print(f"{name}: {path}")
     return path
 
 
@@ -104,11 +105,16 @@ def _macos_install(server: bool) -> None:
         print(f"{label}: already running.")
         return
 
+    env = _pomo_env()
+    if env:
+        print(f"  env: {' '.join(f'{k}={v}' for k, v in sorted(env.items()))}")
+
+    print(f"  writing {plist}")
     plist.write_text(_macos_plist_content(server), encoding="utf-8")
-    subprocess.run(
-        ["launchctl", "bootstrap", f"gui/{os.getuid()}", str(plist)],
-        check=False,
-    )
+
+    cmd = ["launchctl", "bootstrap", f"gui/{os.getuid()}", str(plist)]
+    print(f"  running: {' '.join(cmd)}")
+    subprocess.run(cmd, check=False)
     print(f"{label}: installed and started.")
     print(f"  logs: ~/.local/state/pomo/{'server' if server else 'agent'}.log")
 
@@ -207,12 +213,20 @@ def _linux_install(server: bool) -> None:
         print(f"{name}: already running.")
         return
 
+    env = _pomo_env()
+    if env:
+        print(f"  env: {' '.join(f'{k}={v}' for k, v in sorted(env.items()))}")
+
+    print(f"  writing {svc_path}")
     svc_path.write_text(_linux_service_content(server), encoding="utf-8")
-    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-    result = subprocess.run(
-        ["systemctl", "--user", "enable", "--now", name],
-        check=False,
-    )
+
+    cmd1 = ["systemctl", "--user", "daemon-reload"]
+    print(f"  running: {' '.join(cmd1)}")
+    subprocess.run(cmd1, check=False)
+
+    cmd2 = ["systemctl", "--user", "enable", "--now", name]
+    print(f"  running: {' '.join(cmd2)}")
+    result = subprocess.run(cmd2, check=False)
     if result.returncode == 0:
         print(f"{name}: installed and started.")
         print(f"  logs: journalctl --user -u {name} -f")
