@@ -6,10 +6,17 @@ Stores an append-only history; "current" is the latest non-ended session.
 Conflict resolution is last-write-wins by `updated_at`.
 
 Endpoints:
-    GET  /health          -> {"ok": true}
-    GET  /current         -> current session JSON or {"state": "idle"}
-    POST /sessions        -> upsert current (LWW), append to history
-    POST /sessions/end    -> mark current ended (LWW)
+    GET  /health              -> {"ok": true}
+    GET  /version             -> {"version": "0.1.0"}
+    GET  /current             -> current session JSON or {"state": "idle"}
+    GET  /sessions            -> today's sessions
+                                 (?from=&to=&project=&state=&include_archived=)
+    GET  /projects            -> distinct project names
+    GET  /stats               -> aggregate stats (?from=&to=&project=)
+    POST /sessions            -> upsert current (LWW), append to history
+    POST /sessions/end        -> mark current ended (LWW)
+    PATCH  /sessions/<id>     -> edit name/project on a session (LWW)
+    POST   /sessions/<id>/archive -> soft-delete a session (LWW)
 
 Auth: none by default. If POMO_TOKEN is set in the environment, all requests
 must send `Authorization: Bearer <token>`.
@@ -29,6 +36,7 @@ import os
 import sqlite3
 import sys
 import time
+from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -213,30 +221,66 @@ def end_current(session: dict) -> tuple[bool, dict]:
     return apply_session(ended)
 
 
-def get_today_sessions(project: str | None = None) -> list[dict]:
+def get_sessions(
+    from_date: str | None = None,
+    to_date: str | None = None,
+    project: str | None = None,
+    state: str | None = None,
+    include_archived: bool = False,
+) -> list[dict]:
     with contextlib.closing(_connect()) as conn:
         conn.row_factory = sqlite3.Row
+        where: list[str] = []
         params: list = []
-        sql = """
-            SELECT s.*
-            FROM sessions s
-            INNER JOIN (
-                SELECT id, MAX(updated_at) AS max_updated
-                FROM sessions
-                WHERE date(start_epoch, 'unixepoch') = date('now')
-                {} GROUP BY id
-            ) latest ON s.id = latest.id AND s.updated_at = latest.max_updated
-            WHERE date(s.start_epoch, 'unixepoch') = date('now')
-            {} ORDER BY s.start_epoch ASC
-        """
-        project_inner = ""
-        project_outer = ""
+
+        if from_date is not None:
+            where.append("date(s.start_epoch, 'unixepoch') >= ?")
+            params.append(from_date)
+        else:
+            where.append("date(s.start_epoch, 'unixepoch') >= date('now')")
+
+        if to_date is not None:
+            where.append("date(s.start_epoch, 'unixepoch') <= ?")
+            params.append(to_date)
+        elif from_date is None:
+            where.append("date(s.start_epoch, 'unixepoch') <= date('now')")
+
         if project is not None:
-            project_inner = "AND project = ?"
-            project_outer = "AND s.project = ?"
-            params = [project, project]
-        rows = conn.execute(sql.format(project_inner, project_outer), params).fetchall()
+            where.append("s.project = ?")
+            params.append(project)
+
+        if state is not None:
+            where.append("s.state = ?")
+            params.append(state)
+
+        if not include_archived:
+            where.append("s.state != 'archived'")
+
+        where_clause = " AND ".join(where)
+
+        # Inner subquery: same filters EXCEPT the archive exclusion (we want
+        # the latest row regardless of state, then filter in the outer query).
+        inner_parts = [w for w in where if "archived" not in w]
+        inner_where = " AND ".join(inner_parts).replace("s.", "") if inner_parts else "1=1"
+        inner_params = [p for w, p in zip(where, params, strict=False) if "archived" not in w]
+
+        sql = (
+            "SELECT s.* FROM sessions s "
+            "INNER JOIN ("
+            "  SELECT id, MAX(updated_at) AS max_updated "
+            "  FROM sessions "
+            f" WHERE {inner_where}"
+            "  GROUP BY id"
+            ") latest ON s.id = latest.id AND s.updated_at = latest.max_updated "
+            f"WHERE {where_clause} "
+            "ORDER BY s.start_epoch ASC"
+        )
+        rows = conn.execute(sql, inner_params + params).fetchall()
     return [_row_to_session(r) for r in rows]
+
+
+def get_today_sessions(project: str | None = None) -> list[dict]:
+    return get_sessions(project=project)
 
 
 def get_projects() -> list[dict]:
@@ -253,6 +297,201 @@ def get_projects() -> list[dict]:
     return [{"project": r["project"]} for r in rows]
 
 
+def get_stats(
+    from_date: str | None = None,
+    to_date: str | None = None,
+    project: str | None = None,
+) -> dict:
+    with contextlib.closing(_connect()) as conn:
+        conn.row_factory = sqlite3.Row
+        where: list[str] = ["s.state != 'archived'"]
+        params: list = []
+
+        if from_date is not None:
+            where.append("date(s.start_epoch, 'unixepoch') >= ?")
+            params.append(from_date)
+        else:
+            where.append("date(s.start_epoch, 'unixepoch') = date('now')")
+
+        if to_date is not None:
+            where.append("date(s.start_epoch, 'unixepoch') <= ?")
+            params.append(to_date)
+        elif from_date is None:
+            where.append("date(s.start_epoch, 'unixepoch') <= date('now')")
+
+        if project is not None:
+            where.append("s.project = ?")
+            params.append(project)
+
+        where_clause = " AND ".join(where)
+        # Inner subquery: same filters EXCEPT the archive exclusion.
+        inner_parts = [w for w in where if "archived" not in w]
+        inner_where = " AND ".join(inner_parts).replace("s.", "") if inner_parts else "1=1"
+        inner_params = [p for w, p in zip(where, params, strict=False) if "archived" not in w]
+        sql = (
+            "SELECT s.id, s.state, s.duration, s.project, s.start_epoch FROM sessions s "
+            "INNER JOIN ("
+            "  SELECT id, MAX(updated_at) AS max_updated "
+            "  FROM sessions "
+            f" WHERE {inner_where}"
+            "  GROUP BY id"
+            ") latest ON s.id = latest.id AND s.updated_at = latest.max_updated "
+            f"WHERE {where_clause}"
+        )
+        rows = conn.execute(sql, inner_params + params).fetchall()
+
+    total_seconds = 0
+    session_count = 0
+    projects: dict[str, dict] = {}
+    for r in rows:
+        dur = int(r["duration"])
+        state = r["state"]
+        proj = r["project"] or ""
+        if state not in ("ended", "archived"):
+            total_seconds += dur
+            session_count += 1
+            if proj:
+                if proj not in projects:
+                    projects[proj] = {"seconds": 0, "count": 0}
+                projects[proj]["seconds"] += dur
+                projects[proj]["count"] += 1
+
+    return {
+        "total_seconds": total_seconds,
+        "session_count": session_count,
+        "projects": dict(sorted(projects.items())),
+    }
+
+
+def edit_session(session_id: str, fields: dict) -> dict:
+    """Edit name/project on the latest row for a session (LWW-guarded).
+
+    The incoming `fields` dict must include `updated_at` for the LWW guard.
+    Inserts a new history row with the updated values so the audit log is kept.
+    Returns the updated session dict. Raises LookupError if session not found,
+    ValueError if the write is stale.
+    """
+    with contextlib.closing(_connect()) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE id = ? ORDER BY updated_at DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise LookupError(f"session {session_id!r} not found")
+
+        session = _row_to_session(row)
+        incoming_updated_at = float(fields.get("updated_at", 0))
+
+        if incoming_updated_at < session["updated_at"]:
+            raise ValueError("stale write rejected")
+
+        name = fields.get("name") if "name" in fields else session["name"]
+        project = fields.get("project") if "project" in fields else session["project"]
+        new_updated_at = time.time()
+
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO sessions "
+                "(id, state, start_epoch, duration, origin_machine, "
+                "updated_at, ended_at, name, project, kind) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    session["id"],
+                    session["state"],
+                    int(session["start_epoch"]),
+                    int(session["duration"]),
+                    session["origin_machine"],
+                    new_updated_at,
+                    session.get("ended_at"),
+                    name,
+                    project,
+                    session.get("kind"),
+                ),
+            )
+            srow = conn.execute(
+                "SELECT * FROM sessions WHERE id = ? AND updated_at = ?",
+                (session_id, new_updated_at),
+            ).fetchone()
+            if not srow:
+                conn.execute("ROLLBACK")
+                raise LookupError(f"session {session_id!r} not found after insert")
+            result = _row_to_session(srow)
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    sys.stderr.write(f"pomo-server: {session_id[:8]} edited\n")
+    return result
+
+
+def archive_session(session_id: str, session: dict) -> tuple[bool, dict]:
+    """Mark a session as archived (soft-delete) under LWW.
+
+    The incoming `session` dict carries the `updated_at` for the LWW gate.
+    Returns (applied, current_session).
+    """
+    with contextlib.closing(_connect()) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM sessions WHERE id = ? ORDER BY updated_at DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError(f"session {session_id!r} not found")
+
+        existing = _row_to_session(row)
+        incoming = float(session.get("updated_at", 0))
+        new_updated_at = time.time()
+
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO sessions "
+                "(id, state, start_epoch, duration, origin_machine, "
+                "updated_at, ended_at, name, project, kind) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    existing["id"],
+                    "archived",
+                    int(existing["start_epoch"]),
+                    int(existing["duration"]),
+                    existing["origin_machine"],
+                    new_updated_at,
+                    existing.get("ended_at") or time.time(),
+                    existing.get("name"),
+                    existing.get("project"),
+                    existing.get("kind"),
+                ),
+            )
+            cur = conn.execute(
+                "UPDATE current SET session_id = ?, updated_at = ? "
+                "WHERE singleton = 0 AND session_id = ? AND ? >= updated_at",
+                (session_id, new_updated_at, session_id, incoming),
+            )
+            applied = cur.rowcount == 1
+            sid = session_id[:8]
+            if applied:
+                sys.stderr.write(f"pomo-server: {sid} archived\n")
+            current = _current_session_locked(conn)
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    return applied, current
+
+
+def _validate_date(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid date: {value!r}, expected YYYY-MM-DD") from exc
+    return value
+
+
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------
@@ -265,10 +504,16 @@ class Handler(BaseHTTPRequestHandler):
     def _send_json(self, obj: dict | list, status: int = 200) -> None:
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
+        self._cors_headers()
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _cors_headers(self) -> None:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
 
     def _authorized(self) -> bool:
         if not TOKEN:
@@ -281,7 +526,6 @@ class Handler(BaseHTTPRequestHandler):
         if length <= 0:
             return {}
         if length > MAX_BODY_BYTES:
-            # Reject before allocating/reading the oversized body.
             raise RequestTooLarge(f"{length} > {MAX_BODY_BYTES}")
         raw = self.rfile.read(length)
         return json.loads(raw) if raw else {}
@@ -290,12 +534,19 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{self.address_string()} - {format % args}\n")
 
     # -- routes -----------------------------------------------------------
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors_headers()
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
     def do_GET(self):
         if not self._authorized():
             return self._send_json({"error": "unauthorized"}, 401)
         parsed = urlparse(self.path)
         path = parsed.path
         qs = parse_qs(parsed.query)
+
         if path == "/health":
             return self._send_json({"ok": True})
         if path == "/version":
@@ -304,9 +555,33 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(get_current_session())
         if path == "/sessions":
             project = qs.get("project", [None])[0]
-            return self._send_json(get_today_sessions(project=project))
+            state = qs.get("state", [None])[0]
+            include_archived = qs.get("include_archived", ["0"])[0] == "1"
+            try:
+                from_date = _validate_date(qs.get("from", [None])[0])
+                to_date = _validate_date(qs.get("to", [None])[0])
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, 400)
+            return self._send_json(
+                get_sessions(
+                    from_date=from_date,
+                    to_date=to_date,
+                    project=project,
+                    state=state,
+                    include_archived=include_archived,
+                )
+            )
         if path == "/projects":
             return self._send_json(get_projects())
+        if path == "/stats":
+            try:
+                from_date = _validate_date(qs.get("from", [None])[0])
+                to_date = _validate_date(qs.get("to", [None])[0])
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, 400)
+            project = qs.get("project", [None])[0]
+            stats = get_stats(from_date=from_date, to_date=to_date, project=project)
+            return self._send_json(stats)
         return self._send_json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -326,8 +601,35 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/sessions/end":
                 applied, current = end_current(payload)
                 return self._send_json({"applied": applied, "current": current})
+            if self.path.startswith("/sessions/") and self.path.endswith("/archive"):
+                session_id = self.path.split("/")[2]
+                applied, current = archive_session(session_id, payload)
+                return self._send_json({"applied": applied, "current": current})
         except ValueError as exc:
             return self._send_json({"error": str(exc)}, 400)
+        return self._send_json({"error": "not found"}, 404)
+
+    def do_PATCH(self):
+        if not self._authorized():
+            return self._send_json({"error": "unauthorized"}, 401)
+        try:
+            payload = self._read_json()
+        except RequestTooLarge:
+            return self._send_json({"error": "request too large"}, 413)
+        except json.JSONDecodeError:
+            return self._send_json({"error": "invalid json"}, 400)
+
+        if self.path.startswith("/sessions/") and not self.path.endswith("/archive"):
+            parts = self.path.split("/")
+            if len(parts) == 3:
+                session_id = parts[2]
+                try:
+                    session = edit_session(session_id, payload)
+                    return self._send_json(session)
+                except ValueError as exc:
+                    return self._send_json({"error": str(exc)}, 400)
+                except LookupError as exc:
+                    return self._send_json({"error": str(exc)}, 404)
         return self._send_json({"error": "not found"}, 404)
 
 

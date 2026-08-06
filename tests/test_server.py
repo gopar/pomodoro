@@ -10,6 +10,7 @@ import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 
 import pytest
 
@@ -325,3 +326,211 @@ class TestConcurrency:
         with sqlite3.connect(server.DB_PATH) as conn:
             count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
         assert count == len(pairs)
+
+
+class TestGetSessions:
+    """Date-range, state, and archive filtering for get_sessions."""
+
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
+        server.init_db()
+
+    def test_no_params_returns_today(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop")
+        server.apply_session(s)
+        sessions = server.get_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == s["id"]
+
+    def test_date_range_filtering(self):
+        # Given: sessions on today and yesterday
+        now = int(time.time())
+        today = common.new_session("pomodoro", now - 60, 60, "laptop")
+        yesterday_epoch = now - 100000
+        yesterday = common.new_session("pomodoro", yesterday_epoch, 60, "laptop")
+        server.apply_session(today)
+        server.apply_session(yesterday)
+        # When: filtered to yesterday's date only
+        yesterday_str = date.fromtimestamp(yesterday_epoch).isoformat()
+        sessions = server.get_sessions(from_date=yesterday_str, to_date=yesterday_str)
+        # Then: only yesterday's session returned
+        assert len(sessions) == 1
+        assert sessions[0]["id"] == yesterday["id"]
+
+    def test_state_filtering(self):
+        now = int(time.time())
+        s1 = common.new_session("pomodoro", now - 60, 60, "laptop")
+        s2 = common.new_session("break", now - 120, 60, "laptop")
+        server.apply_session(s1)
+        server.apply_session(s2)
+        sessions = server.get_sessions(state="break")
+        assert len(sessions) == 1
+        assert sessions[0]["kind"] == "break"
+
+    def test_include_archived(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop")
+        server.apply_session(s)
+        server.archive_session(s["id"], {"updated_at": time.time() + 1})
+        sessions = server.get_sessions()
+        assert len(sessions) == 0
+        sessions = server.get_sessions(include_archived=True)
+        assert len(sessions) == 1
+        assert sessions[0]["state"] == "archived"
+
+
+class TestStats:
+    """get_stats aggregates session data."""
+
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
+        server.init_db()
+
+    def test_stats_today_only(self):
+        now = int(time.time())
+        s1 = common.new_session("pomodoro", now - 60, 25 * 60, "laptop", project="work")
+        s2 = common.new_session("break", now - 120, 5 * 60, "laptop", project="work")
+        server.apply_session(s1)
+        server.apply_session(s2)
+        stats = server.get_stats()
+        assert stats["session_count"] == 2
+        assert stats["total_seconds"] == 30 * 60
+        assert stats["projects"]["work"]["seconds"] == 30 * 60
+        assert stats["projects"]["work"]["count"] == 2
+
+    def test_stats_excludes_archived(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 25 * 60, "laptop", project="work")
+        server.apply_session(s)
+        server.archive_session(s["id"], {"updated_at": time.time() + 1})
+        stats = server.get_stats()
+        assert stats["session_count"] == 0
+        assert stats["total_seconds"] == 0
+
+    def test_stats_project_breakdown(self):
+        now = int(time.time())
+        s1 = common.new_session("pomodoro", now - 60, 25 * 60, "laptop", project="work")
+        s2 = common.new_session("pomodoro", now - 120, 15 * 60, "laptop", project="learning")
+        server.apply_session(s1)
+        server.apply_session(s2)
+        stats = server.get_stats()
+        assert stats["projects"]["work"]["seconds"] == 25 * 60
+        assert stats["projects"]["learning"]["seconds"] == 15 * 60
+
+    def test_stats_empty(self):
+        stats = server.get_stats()
+        assert stats == {
+            "total_seconds": 0,
+            "session_count": 0,
+            "projects": {},
+        }
+
+
+class TestEditSession:
+    """PATCH /sessions/<id> — edit name/project."""
+
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
+        server.init_db()
+
+    def test_edit_name(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop", name="old name")
+        server.apply_session(s)
+        updated = server.edit_session(s["id"], {"name": "new name", "updated_at": time.time() + 1})
+        assert updated["name"] == "new name"
+        assert updated["project"] == s["project"]
+
+    def test_edit_project(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop", project="old-proj")
+        server.apply_session(s)
+        updated = server.edit_session(
+            s["id"], {"project": "new-proj", "updated_at": time.time() + 1}
+        )
+        assert updated["project"] == "new-proj"
+        assert updated["name"] == s["name"]
+
+    def test_edit_not_found_raises(self):
+        with pytest.raises(LookupError):
+            server.edit_session("nonexistent", {"name": "nope", "updated_at": 1.0})
+
+    def test_edit_stale_write_raises(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop", name="original")
+        server.apply_session(s)
+        with pytest.raises(ValueError, match="stale"):
+            server.edit_session(s["id"], {"name": "too-late", "updated_at": 0.0})
+
+    def test_edit_inserts_new_history_row(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop", name="v1")
+        server.apply_session(s)
+        server.edit_session(s["id"], {"name": "v2", "updated_at": time.time() + 1})
+        with sqlite3.connect(server.DB_PATH) as conn:
+            rows = conn.execute(
+                "SELECT name, updated_at FROM sessions WHERE id = ? ORDER BY updated_at ASC",
+                (s["id"],),
+            ).fetchall()
+        assert len(rows) == 2
+        assert rows[0][0] == "v1"
+        assert rows[1][0] == "v2"
+
+
+class TestArchiveSession:
+    """POST /sessions/<id>/archive — soft-delete."""
+
+    @pytest.fixture(autouse=True)
+    def _init_db(self, isolated, monkeypatch):
+        monkeypatch.setattr(server, "DB_PATH", isolated / "data" / "pomo.db")
+        server.init_db()
+
+    def test_archive_sets_state(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop")
+        server.apply_session(s)
+        applied, _ = server.archive_session(s["id"], {"updated_at": time.time() + 1})
+        assert applied
+        current = server.get_current_session()
+        assert common.is_idle(current)
+
+    def test_archive_not_found_raises(self):
+        with pytest.raises(ValueError, match="not found"):
+            server.archive_session("nonexistent", {"updated_at": 1.0})
+
+    def test_archive_record_exists_in_history(self):
+        now = int(time.time())
+        s = common.new_session("pomodoro", now - 60, 60, "laptop")
+        server.apply_session(s)
+        server.archive_session(s["id"], {"updated_at": time.time() + 1})
+        sessions = server.get_sessions(include_archived=True)
+        assert len(sessions) == 1
+        assert sessions[0]["state"] == "archived"
+
+
+class TestValidateDate:
+    def test_none_returns_none(self):
+        assert server._validate_date(None) is None
+
+    def test_valid_date_returns_unchanged(self):
+        assert server._validate_date("2024-01-15") == "2024-01-15"
+
+    def test_invalid_format_raises(self):
+        with pytest.raises(ValueError, match="invalid date"):
+            server._validate_date("01-15-2024")
+
+    def test_not_a_date_raises(self):
+        with pytest.raises(ValueError, match="invalid date"):
+            server._validate_date("not-a-date")
+
+    def test_bad_month_day_raises(self):
+        with pytest.raises(ValueError, match="invalid date"):
+            server._validate_date("2024-13-40")
+
+    def test_empty_string_raises(self):
+        with pytest.raises(ValueError, match="invalid date"):
+            server._validate_date("")

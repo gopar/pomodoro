@@ -69,7 +69,7 @@ HOOKS_DIR = CONFIG_DIR / "hooks"
 # Valid session states. `ended` is explicit so stops can propagate over the
 # network (a file deletion cannot be synced; an `ended` record can).
 ACTIVE_STATES = ("pomodoro", "overtime", "break", "break-overtime")
-ALL_STATES = ACTIVE_STATES + ("ended",)
+ALL_STATES = ACTIVE_STATES + ("ended", "archived")
 
 
 def ensure_dirs() -> None:
@@ -117,7 +117,7 @@ def sid8(session: dict) -> str:
 
 
 def is_idle(session: dict | None) -> bool:
-    return not session or session.get("state") in (None, "idle", "ended")
+    return not session or session.get("state") in (None, "idle", "ended", "archived")
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +224,7 @@ _DEFAULT_CONFIG = {
     "server_url": "http://127.0.0.1:8787",
     "machine_name": socket.gethostname(),
     "poll_interval": 5,
+    "dashboard_port": 9090,
     # Fire lifecycle hooks for sessions that STARTED on another machine?
     # false = remote sessions only update the local cache/display.
     "run_for_remote_sessions": False,
@@ -252,6 +253,8 @@ def load_config() -> dict:
         cfg["machine_name"] = socket.gethostname()
     # Env overrides (handy for launchd / testing)
     cfg["server_url"] = os.environ.get("POMO_SERVER_URL", cfg["server_url"])
+    if "POMO_DASHBOARD_PORT" in os.environ:
+        cfg["dashboard_port"] = int(os.environ["POMO_DASHBOARD_PORT"])
     return cfg
 
 

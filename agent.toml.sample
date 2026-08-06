@@ -12,6 +12,9 @@ machine_name = "laptop"
 # Seconds between server polls.
 poll_interval = 5
 
+# Port for the web dashboard (pomo dashboard). Overridden by POMO_DASHBOARD_PORT.
+dashboard_port = 9090
+
 # Fire lifecycle hooks for sessions that STARTED on another machine?
 # false = remote sessions only update the local cache/display here.
 run_for_remote_sessions = false
