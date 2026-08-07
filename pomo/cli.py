@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from datetime import datetime
@@ -27,7 +26,7 @@ from datetime import datetime
 if sys.version_info < (3, 11):
     sys.exit(f"Error: Python 3.11+ required (current: {sys.version.split()[0]})")
 
-from pomo import agent, common, dashboard, hooks, server, service
+from pomo import agent, common, hooks, server, service
 
 
 def _cfg() -> dict:
@@ -316,14 +315,6 @@ def _argparser() -> tuple[argparse.ArgumentParser, argparse.ArgumentParser]:
     p = sub.add_parser("projects", help="List all defined projects")
     p.add_argument("--json", action="store_true", help="Output as JSON")
 
-    p = sub.add_parser("dashboard", help="Start the web dashboard")
-    p.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Dashboard port (overrides config and POMO_DASHBOARD_PORT)",
-    )
-
     svc = sub.add_parser("service", help="Manage pomo processes")
     svc_subs = svc.add_subparsers(dest="service_command")
 
@@ -366,10 +357,6 @@ def main(argv: list[str] | None = None) -> None:
         cmd_history(json_output=args.json, project=args.project)
     elif args.command == "projects":
         cmd_projects(json_output=args.json)
-    elif args.command == "dashboard":
-        if args.port is not None:
-            os.environ["POMO_DASHBOARD_PORT"] = str(args.port)
-        dashboard.main()
     elif args.command == "service":
         if args.service_command is None:
             svc_parser.print_help()

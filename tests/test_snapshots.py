@@ -67,6 +67,3 @@ class TestPomoHelpSnapshot:
 
     def test_pomo_projects_help(self):
         _assert_snapshot("pomo_projects", ["projects", "--help"])
-
-    def test_pomo_dashboard_help(self):
-        _assert_snapshot("pomo_dashboard", ["dashboard", "--help"])

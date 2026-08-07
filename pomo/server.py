@@ -504,16 +504,10 @@ class Handler(BaseHTTPRequestHandler):
     def _send_json(self, obj: dict | list, status: int = 200) -> None:
         body = json.dumps(obj).encode("utf-8")
         self.send_response(status)
-        self._cors_headers()
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-
-    def _cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
 
     def _authorized(self) -> bool:
         if not TOKEN:
@@ -534,12 +528,6 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{self.address_string()} - {format % args}\n")
 
     # -- routes -----------------------------------------------------------
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._cors_headers()
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
     def do_GET(self):
         if not self._authorized():
             return self._send_json({"error": "unauthorized"}, 401)

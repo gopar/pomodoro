@@ -224,7 +224,6 @@ _DEFAULT_CONFIG = {
     "server_url": "http://127.0.0.1:8787",
     "machine_name": socket.gethostname(),
     "poll_interval": 5,
-    "dashboard_port": 9090,
     # Fire lifecycle hooks for sessions that STARTED on another machine?
     # false = remote sessions only update the local cache/display.
     "run_for_remote_sessions": False,
@@ -253,8 +252,6 @@ def load_config() -> dict:
         cfg["machine_name"] = socket.gethostname()
     # Env overrides (handy for launchd / testing)
     cfg["server_url"] = os.environ.get("POMO_SERVER_URL", cfg["server_url"])
-    if "POMO_DASHBOARD_PORT" in os.environ:
-        cfg["dashboard_port"] = int(os.environ["POMO_DASHBOARD_PORT"])
     return cfg
 
 

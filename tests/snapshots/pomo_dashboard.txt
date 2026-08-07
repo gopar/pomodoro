@@ -1,5 +1,0 @@
-usage: pomo dashboard [-h] [--port PORT]
-
-options:
-  -h, --help   show this help message and exit
-  --port PORT  Dashboard port (overrides config and POMO_DASHBOARD_PORT)

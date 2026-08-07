@@ -10,7 +10,7 @@ import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import UTC, datetime
 
 import pytest
 
@@ -353,7 +353,8 @@ class TestGetSessions:
         server.apply_session(today)
         server.apply_session(yesterday)
         # When: filtered to yesterday's date only
-        yesterday_str = date.fromtimestamp(yesterday_epoch).isoformat()
+        # SQLite date(epoch, 'unixepoch') is UTC — match that.
+        yesterday_str = datetime.fromtimestamp(yesterday_epoch, tz=UTC).date().isoformat()
         sessions = server.get_sessions(from_date=yesterday_str, to_date=yesterday_str)
         # Then: only yesterday's session returned
         assert len(sessions) == 1
